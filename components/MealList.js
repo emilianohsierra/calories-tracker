@@ -27,8 +27,8 @@ function MealCard({ meal, onDelete }) {
 
   return (
     <article className="card meal-card">
-      {meal.image ? (
-        <img className="meal-thumb" src={`/api/uploads/${meal.image}`} alt={meal.title} />
+      {meal.image_url ? (
+        <img className="meal-thumb" src={meal.image_url} alt={meal.title} />
       ) : (
         <div className="meal-thumb placeholder" aria-hidden="true">🍽️</div>
       )}

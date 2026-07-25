@@ -1,16 +1,19 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import DailySummary from '@/components/DailySummary';
 import WeekChart from '@/components/WeekChart';
 import MealList from '@/components/MealList';
 import AddMealModal from '@/components/AddMealModal';
 import { addDays, dateLabel, localDateStr } from '@/lib/format';
 import { downscaleImage } from '@/lib/image';
+import { createClient } from '@/lib/supabase/client';
 
 const EMPTY_TOTALS = { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
 
 export default function Home() {
+  const router = useRouter();
   const [date, setDate] = useState(localDateStr());
   const [goal, setGoal] = useState(2000);
   const [meals, setMeals] = useState([]);
@@ -18,10 +21,26 @@ export default function Home() {
   const [week, setWeek] = useState([]);
   const [photo, setPhoto] = useState(null); // { url, blob }
   const [pickError, setPickError] = useState('');
+  const [usage, setUsage] = useState(null); // { plan, remaining, limit }
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
 
   const today = localDateStr();
+
+  const loadUsage = useCallback(async () => {
+    try {
+      const res = await fetch('/api/usage');
+      if (res.ok) setUsage(await res.json());
+    } catch {
+      // no bloquea la app si falla
+    }
+  }, []);
+
+  const onLogout = async () => {
+    await createClient().auth.signOut();
+    router.replace('/login');
+    router.refresh();
+  };
 
   const loadDay = useCallback(async (d) => {
     const res = await fetch(`/api/meals?date=${d}`);
@@ -43,7 +62,8 @@ export default function Home() {
       .then((r) => r.json())
       .then((s) => setGoal(s.calorie_goal))
       .catch(() => {});
-  }, []);
+    loadUsage();
+  }, [loadUsage]);
 
   useEffect(() => {
     loadDay(date);
@@ -75,6 +95,7 @@ export default function Home() {
   const closeModal = () => {
     if (photo) URL.revokeObjectURL(photo.url);
     setPhoto(null);
+    loadUsage(); // el análisis consume crédito aunque no se guarde
   };
 
   const onSaved = () => {
@@ -96,6 +117,18 @@ export default function Home() {
         <div>
           <h1 className="banner-title">Registro Calórico</h1>
           <p className="banner-sub">Tu alimentación, analizada con IA</p>
+        </div>
+        <div className="banner-actions">
+          {usage && (
+            <span className="usage-badge" title="Análisis con IA disponibles este mes">
+              {usage.plan === 'premium'
+                ? '🤖 IA ilimitada'
+                : `🤖 ${usage.remaining ?? 0} análisis restantes`}
+            </span>
+          )}
+          <button type="button" className="link-btn" onClick={onLogout}>
+            Salir
+          </button>
         </div>
       </header>
 

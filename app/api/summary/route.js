@@ -1,10 +1,19 @@
 import { NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { createClient } from '@/lib/supabase/server';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-// Devuelve el total de calorías por día para los `days` días que terminan en `end`.
+// Total de calorías por día para los `days` días que terminan en `end`.
+// Opción A (aprobada): se traen las filas del rango y se suman en JS (sin GROUP BY).
 export async function GET(request) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+  }
+
   const params = new URL(request.url).searchParams;
   const end = params.get('end');
   const days = Math.min(Math.max(Number(params.get('days')) || 7, 1), 31);
@@ -22,13 +31,22 @@ export async function GET(request) {
     );
   }
 
-  const rows = getDb()
-    .prepare(
-      `SELECT date, SUM(calories) AS calories FROM meals
-       WHERE date BETWEEN ? AND ? GROUP BY date`
-    )
-    .all(dates[0], dates[dates.length - 1]);
-  const byDate = Object.fromEntries(rows.map((r) => [r.date, r.calories]));
+  const { data: rows, error } = await supabase
+    .from('meals')
+    .select('date, calories')
+    .eq('user_id', user.id)
+    .gte('date', dates[0])
+    .lte('date', dates[dates.length - 1]);
+
+  if (error) {
+    console.error('Error al leer resumen:', error);
+    return NextResponse.json({ error: 'No se pudo cargar el resumen' }, { status: 500 });
+  }
+
+  const byDate = {};
+  for (const r of rows) {
+    byDate[r.date] = (byDate[r.date] || 0) + r.calories;
+  }
 
   return NextResponse.json({
     days: dates.map((date) => ({ date, calories: byDate[date] || 0 })),
