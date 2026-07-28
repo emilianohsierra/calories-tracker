@@ -91,21 +91,13 @@ export async function POST(request) {
     if (err.billed !== true) {
       await supabase.rpc('reembolsar_analisis', { p_request_id: requestId }).catch(() => {});
     }
-    const label = err.provider?.label || 'el proveedor de IA';
-    const keyEnv = err.provider?.keyEnv || 'la API key';
-    const billing = err.provider?.billingHint || 'la consola del proveedor';
-    let message = `No se pudo analizar la imagen con ${label}. Intenta de nuevo.`;
-    if (err.code === 'NO_API_KEY' || err.code === 'BAD_PROVIDER') {
-      message = err.message;
-    } else if (err.status === 401) {
-      message = `La API key de ${label} es inválida o fue revocada. Revisa ${keyEnv} en .env.local`;
-    } else if (err.code === 'insufficient_quota' || (err.status === 429 && /quota|credit/i.test(err.message || ''))) {
-      message = `Tu cuenta de ${label} no tiene crédito disponible. Agrega saldo en ${billing}.`;
-    } else if (err.status === 429) {
-      message = `Límite de solicitudes de ${label} alcanzado. Espera un momento e intenta de nuevo.`;
-    } else if (err.status === 404 && err.provider) {
-      const model = process.env[err.provider.modelEnv] || err.provider.defaultModel;
-      message = `El modelo "${model}" no existe en ${label}. Revisa ${err.provider.modelEnv} en .env.local`;
+    // (A3) Mensajes genéricos al cliente: no exponer nombres de env vars, modelos ni
+    // proveedor (es recon aunque no sean secretos). El detalle queda en console.error.
+    let message = 'No se pudo analizar la imagen en este momento. Intenta de nuevo.';
+    if (err.status === 429) {
+      message = 'El servicio está saturado por el momento. Espera un poco e intenta de nuevo.';
+    } else if (err.code === 'insufficient_quota') {
+      message = 'El análisis con IA no está disponible temporalmente. Intenta más tarde.';
     }
     return NextResponse.json({ error: message }, { status: 502 });
   }

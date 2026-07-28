@@ -120,6 +120,10 @@ revoke all on public.profiles, public.usage_counters from anon;
 grant select on public.profiles, public.usage_counters to authenticated;
 
 -- -----------------------------------------------------------------------------
+-- ⚠️ m5: ESTA versión trata premium = ILIMITADO. Si ya aplicaste la monetización,
+--     la versión BUENA vive en supabase/monetizacion.sql (premium = pro_limit).
+--     Si re-ejecutas este archivo, VUELVE A CORRER monetizacion.sql después para no
+--     revertir el límite del plan Pro.
 -- 4) consumir_analisis(request_id): reserva 1 crédito de IA de forma atómica.
 --     - Usuario derivado de auth.uid() interno (NO por parámetro) — H7.
 --     - Límite resuelto adentro leyendo profiles.plan + app_config — H6c ignora

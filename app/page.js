@@ -6,9 +6,11 @@ import DailySummary from '@/components/DailySummary';
 import WeekChart from '@/components/WeekChart';
 import MealList from '@/components/MealList';
 import AddMealModal from '@/components/AddMealModal';
+import UpgradeModal from '@/components/UpgradeModal';
 import { addDays, dateLabel, localDateStr } from '@/lib/format';
 import { downscaleImage } from '@/lib/image';
 import { createClient } from '@/lib/supabase/client';
+import { currentPeriod } from '@/lib/usage';
 
 const EMPTY_TOTALS = { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
 
@@ -22,6 +24,8 @@ export default function Home() {
   const [photo, setPhoto] = useState(null); // { url, blob }
   const [pickError, setPickError] = useState('');
   const [usage, setUsage] = useState(null); // { plan, remaining, limit }
+  const [showPlans, setShowPlans] = useState(false);
+  const [toast, setToast] = useState('');
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
 
@@ -30,7 +34,19 @@ export default function Home() {
   const loadUsage = useCallback(async () => {
     try {
       const res = await fetch('/api/usage');
-      if (res.ok) setUsage(await res.json());
+      if (!res.ok) return;
+      const data = await res.json();
+      setUsage(data);
+      // Aviso 80% (una vez por mes, por dispositivo): al llegar a ≤20% del saldo.
+      if (data.plan === 'free' && data.limit) {
+        const used = data.used ?? data.limit - (data.remaining ?? 0);
+        const period = currentPeriod(); // 'YYYY-MM' en America/Mexico_City (m3)
+        const flag = `warned80_${period}`;
+        if (used >= Math.ceil(data.limit * 0.8) && data.remaining > 0 && !localStorage.getItem(flag)) {
+          localStorage.setItem(flag, '1');
+          setToast(`Te quedan ${data.remaining} análisis con IA este mes. Con Pro son ilimitados.`);
+        }
+      }
     } catch {
       // no bloquea la app si falla
     }
@@ -63,6 +79,11 @@ export default function Home() {
       .then((s) => setGoal(s.calorie_goal))
       .catch(() => {});
     loadUsage();
+    // Confirmación post-pago: Stripe regresa con ?upgraded=1.
+    if (typeof window !== 'undefined' && window.location.search.includes('upgraded=1')) {
+      setToast('¡Ya eres Pro! 🚀 Analiza sin límites. Gracias por apoyar la app.');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   }, [loadUsage]);
 
   useEffect(() => {
@@ -120,17 +141,31 @@ export default function Home() {
         </div>
         <div className="banner-actions">
           {usage && (
-            <span className="usage-badge" title="Análisis con IA disponibles este mes">
-              {usage.plan === 'premium'
-                ? '🤖 IA ilimitada'
-                : `🤖 ${usage.remaining ?? 0} análisis restantes`}
-            </span>
+            <button
+              type="button"
+              className={`usage-badge${usage.plan === 'free' && (usage.remaining ?? 0) <= 3 ? ' low' : ''}`}
+              title="Tu plan y análisis con IA"
+              onClick={() => setShowPlans(true)}
+            >
+              {usage.plan === 'pro'
+                ? '⭐ Pro'
+                : `🤖 ${usage.remaining ?? 0}/${usage.limit ?? 10} análisis IA`}
+            </button>
           )}
           <button type="button" className="link-btn" onClick={onLogout}>
             Salir
           </button>
         </div>
       </header>
+
+      {toast && (
+        <div className="toast" role="status">
+          <span>{toast}</span>
+          <button type="button" className="link-btn" onClick={() => setToast('')} aria-label="Cerrar aviso">
+            ✕
+          </button>
+        </div>
+      )}
 
       <nav className="date-nav" aria-label="Cambiar día">
         <button type="button" className="nav-btn" aria-label="Día anterior" onClick={() => setDate(addDays(date, -1))}>
@@ -186,7 +221,18 @@ export default function Home() {
         </button>
       </div>
 
-      {photo && <AddMealModal photo={photo} date={date} onClose={closeModal} onSaved={onSaved} />}
+      {photo && (
+        <AddMealModal
+          photo={photo}
+          date={date}
+          usage={usage}
+          resetLabel={usage?.resets_on}
+          onClose={closeModal}
+          onSaved={onSaved}
+        />
+      )}
+
+      {showPlans && <UpgradeModal variant="plans" usage={usage} onClose={() => setShowPlans(false)} />}
     </main>
   );
 }

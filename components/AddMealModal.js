@@ -2,10 +2,25 @@
 
 import { useState } from 'react';
 import { currentTimeStr } from '@/lib/format';
+import UpgradeModal from '@/components/UpgradeModal';
 
 const MEAL_TYPES = ['desayuno', 'comida', 'cena', 'snack'];
 
-export default function AddMealModal({ photo, date, onClose, onSaved }) {
+const EMPTY_FORM = {
+  title: '',
+  description: '',
+  meal_type: 'comida',
+  calories: 0,
+  protein_g: 0,
+  carbs_g: 0,
+  fat_g: 0,
+  ingredients: [],
+  confidence: '',
+  image: '',
+  provider: '',
+};
+
+export default function AddMealModal({ photo, date, usage, resetLabel, onClose, onSaved }) {
   const [phase, setPhase] = useState('preview'); // preview | analyzing | edit
   const [error, setError] = useState('');
   const [hint, setHint] = useState('');
@@ -13,6 +28,26 @@ export default function AddMealModal({ photo, date, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(null);
   const [rawAnalysis, setRawAnalysis] = useState(null);
+  const [blocked, setBlocked] = useState(false); // paywall: sin análisis IA disponibles
+
+  // El límite aplica SOLO a la IA. Pro = ilimitado; Free necesita saldo > 0.
+  // (M2) Si la cuota no cargó (usage null), NO bloquear: se permite el intento y el
+  // servidor (429) decide. Así no hay paywall falso para Free-con-saldo ni Pro.
+  const canAnalyze = !usage || usage.plan === 'pro' || (usage.remaining ?? 0) > 0;
+  const isPro = usage?.plan === 'pro';
+
+  const onAnalyzeClick = () => {
+    if (canAnalyze) runAnalysis();
+    else setBlocked(true); // gate ANTES de llamar a la IA (no gasta la llamada)
+  };
+
+  // Modo manual (gratis e ilimitado): formulario vacío, sin llamar a la IA.
+  const enterManual = () => {
+    setBlocked(false);
+    setRawAnalysis(null);
+    setForm({ ...EMPTY_FORM, time: currentTimeStr() });
+    setPhase('edit');
+  };
 
   const runAnalysis = async (correction = null, fallbackPhase = 'preview') => {
     setPhase('analyzing');
@@ -105,10 +140,18 @@ export default function AddMealModal({ photo, date, onClose, onSaved }) {
               <button type="button" className="btn btn-ghost" onClick={onClose}>
                 Cancelar
               </button>
-              <button type="button" className="btn btn-primary" onClick={() => runAnalysis()}>
+              <button type="button" className="btn btn-ghost" onClick={enterManual}>
+                ✍️ A mano
+              </button>
+              <button type="button" className="btn btn-primary" onClick={onAnalyzeClick}>
                 ✨ Analizar con IA
               </button>
             </div>
+            {usage?.plan === 'free' && (
+              <p className="confidence-note">
+                Te quedan {usage.remaining ?? 0} análisis con IA este mes. El registro a mano es gratis.
+              </p>
+            )}
           </div>
         )}
 
@@ -186,6 +229,7 @@ export default function AddMealModal({ photo, date, onClose, onSaved }) {
               </p>
             )}
 
+            {isPro && rawAnalysis && (
             <div className="field feedback-box">
               <label htmlFor="feedback">¿La IA se equivocó? Corrígela y vuelve a analizar</label>
               <div className="feedback-row">
@@ -208,6 +252,7 @@ export default function AddMealModal({ photo, date, onClose, onSaved }) {
                 </button>
               </div>
             </div>
+            )}
 
             <div className="modal-actions">
               <button type="button" className="btn btn-ghost" onClick={onClose} disabled={saving}>
@@ -220,6 +265,16 @@ export default function AddMealModal({ photo, date, onClose, onSaved }) {
           </form>
         )}
       </div>
+
+      {blocked && (
+        <UpgradeModal
+          variant="limit"
+          usage={usage}
+          resetLabel={resetLabel}
+          onManual={enterManual}
+          onClose={() => setBlocked(false)}
+        />
+      )}
     </div>
   );
 }
