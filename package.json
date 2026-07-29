@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "next dev -p 7350",
     "build": "next build",
-    "start": "next start -p 7350"
+    "start": "next start -p 7350",
+    "test": "vitest run"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",
@@ -16,5 +17,8 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "stripe": "^22.3.2"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.10"
   }
 }

@@ -7,6 +7,8 @@ import WeekChart from '@/components/WeekChart';
 import MealList from '@/components/MealList';
 import AddMealModal from '@/components/AddMealModal';
 import UpgradeModal from '@/components/UpgradeModal';
+import CoachTipCard from '@/components/CoachTipCard';
+import DayProgress from '@/components/DayProgress';
 import { addDays, dateLabel, localDateStr } from '@/lib/format';
 import { downscaleImage } from '@/lib/image';
 import { createClient } from '@/lib/supabase/client';
@@ -26,6 +28,8 @@ export default function Home() {
   const [usage, setUsage] = useState(null); // { plan, remaining, limit }
   const [showPlans, setShowPlans] = useState(false);
   const [toast, setToast] = useState('');
+  const [profile, setProfile] = useState(null); // nutrition_profile (Ola 1)
+  const [targets, setTargets] = useState(null); // plan calculado
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
 
@@ -77,6 +81,16 @@ export default function Home() {
     fetch('/api/settings')
       .then((r) => r.json())
       .then((s) => setGoal(s.calorie_goal))
+      .catch(() => {});
+    // Perfil de nutrición (Ola 1): si existe, HOME muestra el plan del coach.
+    fetch('/api/profile')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d) {
+          setProfile(d.profile);
+          setTargets(d.targets);
+        }
+      })
       .catch(() => {});
     loadUsage();
     // Confirmación post-pago: Stripe regresa con ?upgraded=1.
@@ -167,6 +181,19 @@ export default function Home() {
         </div>
       )}
 
+      {profile && targets ? (
+        <CoachTipCard coach={profile.coach} />
+      ) : (
+        <section className="plan-cta">
+          <p className="tip-body" style={{ marginTop: 0 }}>
+            Arma tu plan con el coach: calorías y macros a tu medida en un minuto.
+          </p>
+          <button type="button" className="btn btn-primary" onClick={() => router.push('/onboarding')}>
+            Crear mi plan
+          </button>
+        </section>
+      )}
+
       <nav className="date-nav" aria-label="Cambiar día">
         <button type="button" className="nav-btn" aria-label="Día anterior" onClick={() => setDate(addDays(date, -1))}>
           ‹
@@ -183,9 +210,15 @@ export default function Home() {
         </button>
       </nav>
 
-      <DailySummary totals={totals} goal={goal} onGoalSave={onGoalSave} />
+      {profile && targets ? (
+        <DayProgress totals={totals} targets={targets} />
+      ) : (
+        <DailySummary totals={totals} goal={goal} onGoalSave={onGoalSave} />
+      )}
 
-      {week.length > 0 && <WeekChart days={week} goal={goal} selectedDate={date} onSelectDay={setDate} />}
+      {week.length > 0 && (
+        <WeekChart days={week} goal={targets?.kcal_target || goal} selectedDate={date} onSelectDay={setDate} />
+      )}
 
       <h2 className="section-title">Platillos del día</h2>
       {pickError && <div className="error-banner">{pickError}</div>}

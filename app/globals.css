@@ -712,3 +712,94 @@ body {
   gap: 10px;
   margin-top: 8px;
 }
+
+/* ===================== Ola 1 · Sistema de diseño (Rams) ===================== */
+/* Tokens ADITIVOS: no eliminan los existentes. Los componentes nuevos usan estos. */
+:root {
+  --bg: #FBFBF9;
+  --surface-2: #F4F4F1;
+  --text: #14161A;
+  --text-2: #52555C;
+  --text-3: #6B6F77;
+
+  --brand: #0E7C6B;
+  --brand-strong: #0A5F52;
+  --brand-ink: #FFFFFF;
+  --brand-tint: #E3F3F0;
+
+  --protein: #E4572E;
+  --carbs: #F2A93B;
+  --fat: #6C7BF2;
+  --fiber: #7BAE4B;
+  --water: #3BA9F2;
+
+  --ok: #1E874B; --ok-tint: #E4F3EA;
+  --warn-c: #B87710; --warn-tint: #FBF0D6;
+  --over: #C64545; --over-tint: #F7DFDF;
+
+  --shadow-1: 0 1px 2px rgba(12,13,15,0.06);
+  --shadow-2: 0 4px 16px rgba(12,13,15,0.10);
+  --shadow-3: 0 8px 28px rgba(12,13,15,0.14);
+  --ring-focus: 0 0 0 3px rgba(14,124,107,0.30);
+
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s8:32px; --s10:40px;
+  --r-sm:8px; --r-md:12px; --r-lg:16px; --r-xl:20px; --r-pill:999px;
+  --dur-base:200ms; --dur-ring:700ms;
+  --ease-standard: cubic-bezier(.2,0,0,1);
+  --ease-spring: cubic-bezier(.34,1.56,.64,1);
+  --maxw:480px; --touch:44px;
+}
+
+.num { font-variant-numeric: tabular-nums lining-nums; }
+
+:focus-visible { outline: none; box-shadow: var(--ring-focus); border-radius: inherit; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ring-anim, .ring-anim * { transition-duration: .001ms !important; }
+}
+
+/* Saludo / HOME conversacional */
+.greeting { display:flex; align-items:center; justify-content:space-between; gap:var(--s3); margin: var(--s2) 0 var(--s4); }
+.greeting-title { font-size:22px; line-height:28px; font-weight:600; color:var(--text); margin:0; }
+.greeting-sub { font-size:13px; line-height:18px; color:var(--text-2); margin:2px 0 0; }
+
+/* Anillos de progreso */
+.rings-row { display:flex; gap:var(--s4); align-items:center; justify-content:center; flex-wrap:wrap; }
+.mini-rings { display:flex; gap:var(--s3); }
+.ring-label { font-size:12px; font-weight:500; color:var(--text-2); text-align:center; margin-top:2px; }
+.ring-caption { font-size:12px; color:var(--text-3); }
+
+/* Tarjeta Consejo del día */
+.tip-card { background: linear-gradient(135deg, var(--brand-tint), var(--surface)); border:1px solid var(--border); border-radius: var(--r-lg); padding: var(--s5); box-shadow: var(--shadow-1); margin-bottom: var(--s4); }
+.tip-eyebrow { font-size:12px; font-weight:600; letter-spacing:.02em; color:var(--brand-strong); text-transform:uppercase; }
+.tip-body { font-size:16px; line-height:23px; color:var(--text); margin:var(--s2) 0 var(--s3); }
+.tip-actions { display:flex; gap:var(--s3); }
+
+/* Chips de acciones rápidas */
+.quick-actions { display:flex; gap:var(--s2); flex-wrap:wrap; margin: var(--s2) 0 var(--s4); }
+.chip-action { min-height:var(--touch); display:inline-flex; align-items:center; gap:6px; padding:0 var(--s4); border-radius:var(--r-pill); background:var(--surface-2); border:1px solid var(--border); color:var(--text); font-size:14px; font-weight:500; cursor:pointer; }
+
+/* CTA de "arma tu plan" cuando no hay perfil */
+.plan-cta { background:var(--brand-tint); border:1px solid var(--border); border-radius:var(--r-lg); padding:var(--s5); margin-bottom:var(--s4); text-align:center; }
+
+/* Onboarding wizard */
+.wizard { max-width: var(--maxw); margin:0 auto; padding: var(--s5) var(--s4) var(--s10); min-height:100dvh; display:flex; flex-direction:column; }
+.wizard-progress { height:6px; background:var(--surface-2); border-radius:var(--r-pill); overflow:hidden; margin-bottom:var(--s6); }
+.wizard-progress > span { display:block; height:100%; background:var(--brand); transition: width var(--dur-base) var(--ease-standard); }
+.wizard-step { flex:1; }
+.wizard-title { font-size:26px; line-height:32px; font-weight:700; color:var(--text); margin:0 0 var(--s2); }
+.wizard-help { font-size:14px; color:var(--text-2); margin:0 0 var(--s5); }
+.wizard-nav { display:flex; gap:var(--s3); margin-top:var(--s6); }
+.goal-grid { display:grid; grid-template-columns:1fr 1fr; gap:var(--s3); }
+.goal-card { padding:var(--s4); border-radius:var(--r-md); border:2px solid var(--border); background:var(--surface); cursor:pointer; text-align:left; font-size:15px; font-weight:600; color:var(--text); min-height:72px; }
+.goal-card[aria-pressed="true"] { border-color:var(--brand); background:var(--brand-tint); }
+.goal-card:disabled { opacity:.5; cursor:not-allowed; }
+.goal-card small { display:block; font-weight:400; font-size:12px; color:var(--text-2); margin-top:2px; }
+.field-row { display:flex; flex-direction:column; gap:var(--s2); margin-bottom:var(--s4); }
+.field-row > label { font-size:13px; font-weight:600; color:var(--text-2); }
+.field-row input, .field-row select { min-height:var(--touch); padding:0 var(--s3); border:1px solid var(--border); border-radius:var(--r-md); background:var(--surface); color:var(--text); font-size:16px; }
+.segmented { display:flex; gap:var(--s2); }
+.segmented button { flex:1; min-height:var(--touch); border:1px solid var(--border); border-radius:var(--r-md); background:var(--surface); color:var(--text); font-weight:600; cursor:pointer; }
+.segmented button[aria-pressed="true"] { border-color:var(--brand); background:var(--brand-tint); color:var(--brand-strong); }
+.reveal { text-align:center; }
+.reveal-kcal { font-size:44px; line-height:48px; font-weight:700; color:var(--text); }
