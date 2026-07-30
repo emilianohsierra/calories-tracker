@@ -115,7 +115,10 @@ export async function POST(request) {
     .upsert(profileRow, { onConflict: 'user_id' });
   if (pErr) {
     console.error('Error al guardar perfil:', pErr);
-    return NextResponse.json({ error: 'No se pudo guardar tu perfil' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'No se pudo guardar tu perfil', detail: pErr.message, code: pErr.code },
+      { status: 500 }
+    );
   }
 
   // --- Calcular plan (DETERMINISTA) y persistir targets ---
@@ -124,15 +127,21 @@ export async function POST(request) {
     targets = computeTargets(profileRow);
   } catch (err) {
     console.error('Error al calcular targets:', err);
-    return NextResponse.json({ error: 'No se pudo calcular tu plan' }, { status: 500 });
+    return NextResponse.json({ error: 'No se pudo calcular tu plan', detail: err.message }, { status: 500 });
   }
 
+  // `warn` es un aviso suave para la UI, NO una columna de nutrition_targets: se excluye
+  // del insert para no disparar un error de esquema (PGRST204).
+  const { warn, ...targetCols } = targets;
   const { error: tErr } = await supabase
     .from('nutrition_targets')
-    .upsert({ user_id: user.id, ...targets, computed_at: new Date().toISOString() }, { onConflict: 'user_id' });
+    .upsert({ user_id: user.id, ...targetCols, computed_at: new Date().toISOString() }, { onConflict: 'user_id' });
   if (tErr) {
     console.error('Error al guardar targets:', tErr);
-    return NextResponse.json({ error: 'No se pudo guardar tu plan' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'No se pudo guardar tu plan', detail: tErr.message, code: tErr.code },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ profile: profileRow, targets }, { status: 201 });

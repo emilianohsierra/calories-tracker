@@ -213,7 +213,63 @@ metas_habito = {
 
 ---
 
-## 5. Recompute dinámico de macros (compartido por los 4 coaches)
+## 4b. Coach RECOMPOSICIÓN  (5ta tarjeta de Ola 1)
+
+La vía **coherente** para "perder grasa y ganar músculo a la vez": calorías cerca de mantenimiento (déficit **ligero**, modulado por % grasa) + **proteína alta** + entrenamiento de fuerza. No es un déficit agresivo ni un superávit; por eso NO se resuelve multi-seleccionando objetivos contradictorios (§ nota final).
+
+**(a) Onboarding:** sexo, edad, peso, altura, actividad, **[grasa_pct — recomendado: modula el déficit]**, dias_entreno (opcional).
+
+**Params (coaches.js):**
+```
+recomposicion: {
+  id:'recomposicion', label:'Recomposición',
+  proteinPerKg: 2.2,          // 2.0–2.4 (alta, prioriza síntesis proteica)
+  fatPerKg: 0.9,
+  // déficit LIGERO modulado por % grasa (umbrales por sexo); tope duro 10%
+  deficitByBodyFat: {
+    male:   [{bf:25, def:0.10}, {bf:18, def:0.05}, {bf:0, def:0.0}],
+    female: [{bf:32, def:0.10}, {bf:25, def:0.05}, {bf:0, def:0.0}],
+  },
+  defaultDeficit: 0.05,        // si NO hay % grasa → déficit ligero conservador
+}
+```
+
+**(b) Cálculo:**
+```
+B = bmr(...)            // Katch-McArdle si hay grasa_pct (habitual en recomp), si no Mifflin
+T = tdee(B, actividad)
+
+// déficit ligero modulado por % grasa (más grasa corporal → más margen de déficit)
+function deficitRecomp(grasa_pct, sexo):
+    if grasa_pct == null: return 0.05                       // default conservador
+    tabla = deficitByBodyFat[sexo]
+    return primer def de la tabla donde grasa_pct >= bf     // 0.10 / 0.05 / 0.0
+
+defPct = deficitRecomp(grasa_pct, sexo)         // ∈ {0.0, 0.05, 0.10}
+objetivo = T * (1 - defPct)
+deficitDia = T - objetivo
+objetivo = aplicaTopesDeficit({objetivo, T, B, sexo, peso, deficitDia})   // §0.4: piso + ritmo ≤1%/sem
+
+prot_g_kg = 2.2 ; fat_g_kg = 0.9
+M = macros(objetivo, peso, 2.2, 0.9)            // carbos = resto
+agua = hidratacion_ml(peso, min_entreno_dia_estimado)
+fibra = fibra_g(objetivo)
+```
+
+**Topes (los MISMOS de siempre):** déficit **máximo 10%** (nunca agresivo); objetivo ≥ piso (§0.4, `max(BMR·1.1, 1500H/1200M)`); ritmo ≤ 1%/sem; proteína ≥ 2.0 g/kg; grasa ≥ 0.8 g/kg. La proteína alta se mantiene **aunque** el déficit exprima los carbos (`macros()` baja la grasa a su piso y marca `warn`, no bloquea).
+
+**Sanity check (verificado contra el código, 2026-07-28):**
+- Hombre 30a/80kg/178cm, moderado (1.55), **grasa 22%** (media → −5%): B(Katch)≈1718, T≈2663, objetivo≈**2530**, prot **176 g**, gras **72 g**, carbos ~**294 g**, fibra 35, agua 2800. ✔
+- Mismo sin % grasa (default −5%, Mifflin): ≈**2603** kcal, 176/313/72. ✔
+- Grasa alta (95 kg, 30%) → −10%: **2520** kcal, 209/227/86. ✔
+- Lean (72 kg, 12%) → **0% (mantenimiento)**: **2695** kcal, 158/369/65. ✔
+- **Borde — peso muy bajo (mujer 42 kg, 35%, −10%):** objetivo cae a **1200** (piso femenino manda pese al −10%). ✔ seguridad intacta.
+
+**(c) Recompute dinámico:** igual que el resto → §5.
+
+---
+
+## 5. Recompute dinámico de macros (compartido por los 5 coaches)
 
 El objetivo diario (`objetivo_dia = {kcal, prot_g, carb_g, gras_g}`) es fijo por el coach. Lo dinámico es **lo pendiente** según lo consumido y el **replaneo de las comidas afectadas**.
 
@@ -341,4 +397,11 @@ if racha_registro es hito (7/14/30): insight de racha
 - Persistir por usuario: `objetivo_dia`, `coach`, `personalidad`, `tips_recientes[14d]`, medias móviles y `semanas_estancado` para §5.1.
 - Redondeos y `warn` de §0.5 deben mostrarse como aviso suave, nunca bloquear el guardado.
 
-**Coordinación:** Rams (UI de onboarding que capture las variables (a) de cada coach; tarjeta del consejo del día sin PII; UI del reporte semanal). Drucker (los 4 coaches de Ola 1 son no-médicos → sin diferir; personalidad/consejo del día como valor). Los coaches clínicos y de etapas NO entran en Ola 1 (§7 del rediseño).
+## 9. Nota — cómo comunicar objetivos combinados
+
+- **"Perder grasa Y ganar músculo a la vez" = RECOMPOSICIÓN.** Es la vía coherente y se ofrece como **una tarjeta de objetivo propia** (la 5ta), no como multi-selección.
+- **No permitir multi-seleccionar objetivos calóricos contradictorios** (p. ej. "pérdida de grasa" + "hipertrofia"): uno pide déficit y el otro superávit, y el motor no puede satisfacer ambos. El onboarding fuerza **un solo objetivo calórico** (pérdida de grasa · hipertrofia · recomposición · mantener · runner) y, si el usuario quiere las dos cosas, lo encamina a **Recomposición**.
+- **Los estilos de dieta son un EJE APARTE** (mediterránea, keto, vegana, alta proteína, etc.): se combinan **con cualquier** objetivo como overlay de restricción/estilo, sin contradicción calórica (ver `plan/rediseno-coach-ia.md` A1). Es decir: **1 objetivo calórico × N estilos de dieta × 1 tono** — los objetivos calóricos son excluyentes; la dieta y el tono no.
+- Copy sugerido en la tarjeta: *"¿Quieres perder grasa y ganar músculo? Elige **Recomposición** — comes cerca de tu mantenimiento con proteína alta para lograr ambas sin dietas extremas."*
+
+**Coordinación:** Rams (UI de onboarding que capture las variables (a) de cada coach; **Recomposición como 5ta tarjeta**; que la selección de objetivo calórico sea de opción ÚNICA, con la dieta y el tono como ejes separados; tarjeta del consejo del día sin PII; UI del reporte semanal). Drucker (los **5** coaches de Ola 1 son no-médicos → sin diferir; personalidad/consejo del día como valor). Los coaches clínicos y de etapas NO entran en Ola 1 (§7 del rediseño).

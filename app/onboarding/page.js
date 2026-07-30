@@ -59,7 +59,9 @@ export default function OnboardingPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'No se pudo calcular tu plan');
+      if (!res.ok) {
+        throw new Error(data.detail ? `${data.error} — ${data.detail}` : data.error || 'No se pudo calcular tu plan');
+      }
       setTargets(data.targets);
       setStep(6);
     } catch (err) {
