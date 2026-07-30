@@ -182,7 +182,14 @@ export default function Home() {
       )}
 
       {profile && targets ? (
-        <CoachTipCard coach={profile.coach} />
+        <>
+          <CoachTipCard coach={profile.coach} />
+          <div style={{ textAlign: 'right', margin: '-8px 0 var(--s3)' }}>
+            <button type="button" className="link-btn" onClick={() => router.push('/perfil')}>
+              Editar mi plan
+            </button>
+          </div>
+        </>
       ) : (
         <section className="plan-cta">
           <p className="tip-body" style={{ marginTop: 0 }}>

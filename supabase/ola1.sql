@@ -19,7 +19,7 @@ create table if not exists public.nutrition_profiles (
   body_fat_pct        real check (body_fat_pct between 3 and 60),
   activity_pal        real not null check (activity_pal between 1.2 and 1.9),
   training_days       int  not null default 0 check (training_days between 0 and 14),
-  coach               text not null check (coach in ('perdida_grasa','hipertrofia','runner','bienestar')),
+  coach               text not null check (coach in ('perdida_grasa','hipertrofia','runner','bienestar','recomposicion')),
   coach_params        jsonb not null default '{}'::jsonb,   -- respuestas específicas del coach (ritmo, experiencia, km_semana, foco…)
   objectives          jsonb not null default '{}'::jsonb,
   dietary_pattern     text not null default 'ninguno',
@@ -53,6 +53,34 @@ create table if not exists public.nutrition_targets (
   method      text not null check (method in ('mifflin', 'katch')),
   computed_at timestamptz not null default now()
 );
+
+-- -----------------------------------------------------------------------------
+-- 2b) FIX (B-R1): el CHECK de `coach` debe incluir 'recomposicion'. En BD que ya
+--     tienen la tabla, `create table if not exists` NO re-aplica el CHECK viejo (solo
+--     4 coaches) → guardar Recomposición falla con 23514 (500). Este bloque es
+--     IDEMPOTENTE y robusto al nombre real: encuentra CUALQUIER CHECK sobre `coach`,
+--     lo elimina y agrega el correcto con los 5 coaches. (Re-ejecutable sin daño.)
+--     ⚠️ Emiliano DEBE RE-CORRER este archivo para arreglar su BD existente.
+-- -----------------------------------------------------------------------------
+do $$
+declare c record;
+begin
+  for c in
+    select con.conname
+    from pg_constraint con
+    join pg_class rel on rel.oid = con.conrelid
+    join pg_namespace ns on ns.oid = rel.relnamespace
+    where ns.nspname = 'public'
+      and rel.relname = 'nutrition_profiles'
+      and con.contype = 'c'
+      and pg_get_constraintdef(con.oid) ilike '%coach%'
+  loop
+    execute format('alter table public.nutrition_profiles drop constraint %I', c.conname);
+  end loop;
+  alter table public.nutrition_profiles
+    add constraint nutrition_profiles_coach_check
+    check (coach in ('perdida_grasa','hipertrofia','runner','bienestar','recomposicion'));
+end $$;
 
 -- -----------------------------------------------------------------------------
 -- 3) RLS — CRUD propio scoped a auth.uid(), con WITH CHECK en insert/update.

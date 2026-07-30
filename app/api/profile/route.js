@@ -109,6 +109,13 @@ export async function POST(request) {
     updated_at: new Date().toISOString(),
   };
 
+  // Plan ANTERIOR (para el diff previo→nuevo en la edición). No toca racha ni historial.
+  const { data: prevTargets } = await supabase
+    .from('nutrition_targets')
+    .select('*')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
   // --- Guardar perfil ---
   const { error: pErr } = await supabase
     .from('nutrition_profiles')
@@ -144,5 +151,5 @@ export async function POST(request) {
     );
   }
 
-  return NextResponse.json({ profile: profileRow, targets }, { status: 201 });
+  return NextResponse.json({ profile: profileRow, targets, targets_prev: prevTargets || null }, { status: 201 });
 }
