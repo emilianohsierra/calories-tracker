@@ -8,6 +8,7 @@ const FALLBACK = {
   hipertrofia: 'Reparte tu proteína en 3–4 tomas al día para maximizar la síntesis muscular.',
   runner: 'Llega a tus entrenos con carbohidratos: son la gasolina que sostiene tu ritmo.',
   bienestar: 'Suma una verdura más hoy. Los pequeños cambios sostenidos son los que quedan.',
+  recomposicion: 'Proteína alta + fuerza: es la fórmula para perder grasa y ganar músculo a la vez.',
 };
 
 export default function CoachTipCard({ coach, tip }) {

@@ -9,6 +9,7 @@ const COACHES = [
   { id: 'hipertrofia', label: 'Ganar músculo', desc: 'Crecer con superávit limpio' },
   { id: 'runner', label: 'Correr / resistencia', desc: 'Rendir y recuperar mejor' },
   { id: 'bienestar', label: 'Comer más sano', desc: 'Hábitos y mantenimiento' },
+  { id: 'recomposicion', label: 'Recomposición', desc: 'Perder grasa y ganar músculo a la vez' },
 ];
 const ACTIVITY = [
   { key: 1.2, label: 'Sedentario', desc: 'Poco o nada de ejercicio' },
@@ -28,6 +29,7 @@ export default function OnboardingPage() {
   const [height, setHeight] = useState('170');
   const [weight, setWeight] = useState('70');
   const [pal, setPal] = useState(1.375);
+  const [bodyFat, setBodyFat] = useState('');
   const [cp, setCp] = useState({ ritmo: 'moderado', experiencia: 'novato', km_semana: '20' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -56,6 +58,7 @@ export default function OnboardingPage() {
           activity_pal: pal, // ya es uno de los 5 niveles válidos (1.2–1.9)
           coach,
           coach_params,
+          ...(bodyFat ? { body_fat_pct: Number(bodyFat) } : {}),
         }),
       });
       const data = await res.json();
@@ -192,6 +195,24 @@ export default function OnboardingPage() {
               <div className="field-row">
                 <label htmlFor="km">Kilómetros por semana</label>
                 <input id="km" type="number" inputMode="numeric" min="0" max="250" value={cp.km_semana} onChange={(e) => setParam('km_semana', e.target.value)} />
+              </div>
+            )}
+            {coach === 'recomposicion' && (
+              <div className="field-row">
+                <label htmlFor="bf">% de grasa corporal (opcional)</label>
+                <input
+                  id="bf"
+                  type="number"
+                  inputMode="decimal"
+                  min="3"
+                  max="60"
+                  placeholder="ej. 22 — afina tu déficit"
+                  value={bodyFat}
+                  onChange={(e) => setBodyFat(e.target.value)}
+                />
+                <span className="wizard-help" style={{ margin: 0 }}>
+                  Sin este dato usamos un déficit ligero conservador.
+                </span>
               </div>
             )}
             {coach === 'bienestar' && <p className="wizard-help">Listo. Tu plan será de mantenimiento con foco en hábitos.</p>}
