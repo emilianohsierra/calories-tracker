@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ProgressRing from '@/components/ProgressRing';
 import PlanDiff from '@/components/PlanDiff';
+import ThemeToggle from '@/components/ThemeToggle';
+import Icon from '@/components/ui/Icon';
 
 // Editar perfil/plan: formulario PRE-LLENADO con los valores actuales. Al guardar,
 // reusa POST /api/profile (que recomputa los targets con computeTargets). Aditivo.
@@ -128,7 +130,11 @@ export default function PerfilPage() {
       {error && <div className="error-banner">{error}</div>}
       {saved && (
         <>
-          <div className="toast" role="status"><span>Plan actualizado ✔</span></div>
+          <div className="toast" role="status">
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="check" size={16} /> Plan actualizado
+            </span>
+          </div>
           <PlanDiff prev={prevTargets} next={targets} />
         </>
       )}
@@ -221,6 +227,11 @@ export default function PerfilPage() {
           </div>
         </section>
       )}
+
+      <div className="field-row" style={{ marginTop: 'var(--s4)' }}>
+        <label>Apariencia</label>
+        <ThemeToggle />
+      </div>
 
       <div className="wizard-nav">
         <button type="button" className="btn btn-ghost" onClick={() => router.push('/')} disabled={busy}>

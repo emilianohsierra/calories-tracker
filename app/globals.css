@@ -117,8 +117,8 @@ body {
   background: var(--surface);
   color: var(--ink-secondary);
   border-radius: 8px;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   font-size: 16px;
   cursor: pointer;
 }
@@ -254,8 +254,8 @@ body {
 .chart-tooltip {
   position: absolute;
   transform: translate(-50%, -100%);
-  background: var(--ink);
-  color: #fff;
+  background: var(--text);
+  color: var(--surface);
   font-size: 12px;
   padding: 5px 9px;
   border-radius: 7px;
@@ -358,11 +358,16 @@ body {
   font-size: 15px;
   padding: 4px;
   border-radius: 6px;
+  min-width: var(--touch);
+  min-height: var(--touch);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .icon-btn:hover {
-  color: var(--critical);
-  background: var(--page);
+  color: var(--over);
+  background: var(--surface-2);
 }
 
 .empty-state {
@@ -384,7 +389,7 @@ body {
 
 .btn-primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--brand-ink);   /* blanco en claro, verde oscuro en dark → contraste AA sobre teal en ambos */
 }
 
 .btn-primary:hover {
@@ -574,9 +579,9 @@ body {
 }
 
 .error-banner {
-  background: var(--critical-track);
-  color: #7c1d1d;
-  border: 1px solid rgba(208, 59, 59, 0.35);
+  background: var(--over-tint);
+  color: var(--text);
+  border: 1px solid var(--over);
   border-radius: 10px;
   padding: 10px 12px;
   font-size: 13px;
@@ -596,9 +601,9 @@ body {
 .usage-badge {
   font-size: 12px;
   font-weight: 600;
-  color: var(--accent-strong);
+  color: var(--brand-strong);
   background: var(--surface);
-  border: 1px solid rgba(42, 120, 214, 0.18);
+  border: 1px solid var(--border);
   border-radius: 999px;
   padding: 4px 10px;
   white-space: nowrap;
@@ -640,9 +645,10 @@ body {
   font-size: 15px;
 }
 
-.field input:focus {
-  outline: 2px solid var(--accent-track);
-  border-color: var(--accent);
+.field input:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+  border-color: var(--brand);
 }
 
 .auth-switch {
@@ -655,9 +661,9 @@ body {
 
 /* --- Paso E: monetización (paywall / planes) --- */
 .usage-badge.low {
-  color: var(--critical);
-  border-color: var(--critical-track);
-  background: var(--critical-track);
+  color: var(--over);
+  border-color: var(--over);
+  background: var(--over-tint);
 }
 .usage-badge {
   cursor: pointer;
@@ -668,9 +674,9 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  background: #eef5ff;
-  border: 1px solid rgba(42, 120, 214, 0.25);
-  color: var(--ink);
+  background: var(--brand-tint);
+  border: 1px solid var(--border);
+  color: var(--text);
   border-radius: 12px;
   padding: 10px 14px;
   margin-bottom: 14px;
@@ -717,6 +723,7 @@ body {
 /* Tokens ADITIVOS: no eliminan los existentes. Los componentes nuevos usan estos. */
 :root {
   --bg: #FBFBF9;
+  --surface: #FFFFFF;           /* canónico (spec §1); antes heredaba legacy #fcfcfb */
   --surface-2: #F4F4F1;
   --text: #14161A;
   --text-2: #52555C;
@@ -727,11 +734,23 @@ body {
   --brand-ink: #FFFFFF;
   --brand-tint: #E3F3F0;
 
+  /* Alias legacy → canónico: mata el azul pre-rebrand en modo CLARO de un tiro.
+     (En dark ya estaba aliasado, líneas ~836/854.) Resuelven en tiempo de uso. */
+  --accent: var(--brand);
+  --accent-strong: var(--brand-strong);
+  --accent-track: var(--brand-tint);
+  --warn: var(--warn-c);        /* nombre canónico del spec; --warn-c sigue vivo */
+
   --protein: #E4572E;
   --carbs: #F2A93B;
   --fat: #6C7BF2;
   --fiber: #7BAE4B;
   --water: #3BA9F2;
+  /* Tracks (fondo de barras/anillos de macro) — tint claro de cada nutriente */
+  --protein-track: #F6D9CF;
+  --carbs-track: #FBEAC9;
+  --fat-track: #D8DCFB;
+  --fiber-track: #E2EFD3;
 
   --ok: #1E874B; --ok-tint: #E4F3EA;
   --warn-c: #B87710; --warn-tint: #FBF0D6;
@@ -741,6 +760,7 @@ body {
   --shadow-2: 0 4px 16px rgba(12,13,15,0.10);
   --shadow-3: 0 8px 28px rgba(12,13,15,0.14);
   --ring-focus: 0 0 0 3px rgba(14,124,107,0.30);
+  --overlay: rgba(12,13,15,0.45);   /* scrim de modales — para migrar .modal-overlay (P2 Casey) */
 
   --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s8:32px; --s10:40px;
   --r-sm:8px; --r-md:12px; --r-lg:16px; --r-xl:20px; --r-pill:999px;
@@ -835,11 +855,12 @@ body {
   --brand:#2BC4AC; --brand-strong:#4FD8C2; --brand-ink:#06231E; --brand-tint:rgba(43,196,172,0.14);
   --accent:#2BC4AC; --accent-strong:#4FD8C2; --accent-track:rgba(43,196,172,0.20);
   --protein:#F0714D; --carbs:#F4B857; --fat:#8A96F5; --fiber:#97C466; --water:#5CBAF5;
+    --protein-track:rgba(240,113,77,.18); --carbs-track:rgba(244,184,87,.18); --fat-track:rgba(138,150,245,.18); --fiber-track:rgba(151,196,102,.18);
   --ok:#34B36B; --ok-tint:rgba(52,179,107,.16);
   --warn-c:#E0A63A; --warn-tint:rgba(224,166,58,.16); --warning:#E0A63A; --warning-track:rgba(224,166,58,.16);
   --over:#E56A6A; --over-tint:rgba(229,106,106,.16); --critical:#E56A6A; --critical-track:rgba(229,106,106,.16);
   --shadow-1:0 1px 2px rgba(0,0,0,.4); --shadow-2:0 4px 16px rgba(0,0,0,.5); --shadow-3:0 8px 28px rgba(0,0,0,.6);
-  --ring-focus:0 0 0 3px rgba(43,196,172,.4);
+  --ring-focus:0 0 0 3px rgba(43,196,172,.4); --overlay:rgba(0,0,0,.6);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -853,11 +874,12 @@ body {
     --brand:#2BC4AC; --brand-strong:#4FD8C2; --brand-ink:#06231E; --brand-tint:rgba(43,196,172,0.14);
     --accent:#2BC4AC; --accent-strong:#4FD8C2; --accent-track:rgba(43,196,172,0.20);
     --protein:#F0714D; --carbs:#F4B857; --fat:#8A96F5; --fiber:#97C466; --water:#5CBAF5;
+    --protein-track:rgba(240,113,77,.18); --carbs-track:rgba(244,184,87,.18); --fat-track:rgba(138,150,245,.18); --fiber-track:rgba(151,196,102,.18);
     --ok:#34B36B; --ok-tint:rgba(52,179,107,.16);
     --warn-c:#E0A63A; --warn-tint:rgba(224,166,58,.16); --warning:#E0A63A; --warning-track:rgba(224,166,58,.16);
     --over:#E56A6A; --over-tint:rgba(229,106,106,.16); --critical:#E56A6A; --critical-track:rgba(229,106,106,.16);
     --shadow-1:0 1px 2px rgba(0,0,0,.4); --shadow-2:0 4px 16px rgba(0,0,0,.5); --shadow-3:0 8px 28px rgba(0,0,0,.6);
-    --ring-focus:0 0 0 3px rgba(43,196,172,.4);
+    --ring-focus:0 0 0 3px rgba(43,196,172,.4); --overlay:rgba(0,0,0,.6);
   }
 }
 html, body { transition: background-color var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard); }
@@ -874,7 +896,7 @@ html, body { transition: background-color var(--dur-base) var(--ease-standard), 
 .coach-titular { font-size:15px; line-height:22px; font-weight:600; color:var(--text); letter-spacing:-.01em; }
 
 /* Tipografía de tarjetas (Rams §1) */
-.c-title    { font-size:15px; line-height:21px; font-weight:600; color:var(--text); letter-spacing:-.01em; }
+.c-title    { font-size:17px; line-height:24px; font-weight:600; color:var(--text); letter-spacing:-.01em; }
 .c-subtitle { font-size:13px; line-height:18px; font-weight:500; color:var(--text-2); }
 .c-body     { font-size:14px; line-height:21px; font-weight:400; color:var(--text); }
 .c-data     { font-weight:600; color:var(--text); font-variant-numeric:tabular-nums lining-nums; }

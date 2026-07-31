@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ProgressRing from '@/components/ProgressRing';
+import Icon from '@/components/ui/Icon';
 
 const COACHES = [
   { id: 'perdida_grasa', label: 'Perder grasa', desc: 'Bajar grasa sin perder músculo' },
@@ -230,7 +231,10 @@ export default function OnboardingPage() {
 
         {step === 6 && targets && (
           <div className="reveal">
-            <h1 className="wizard-title">Tu plan está listo 🎉</h1>
+            <h1 className="wizard-title">
+              Tu plan está listo{' '}
+              <Icon name="check" size={22} style={{ verticalAlign: '-3px' }} />
+            </h1>
             <ProgressRing value={1} goal={1} size={180} stroke={16} color="var(--brand)">
               <span className="num reveal-kcal">{targets.kcal_target}</span>
               <span className="ring-caption">kcal / día</span>

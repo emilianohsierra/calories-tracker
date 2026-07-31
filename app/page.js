@@ -9,6 +9,8 @@ import AddMealModal from '@/components/AddMealModal';
 import UpgradeModal from '@/components/UpgradeModal';
 import CoachTipCard from '@/components/CoachTipCard';
 import DayProgress from '@/components/DayProgress';
+import GreetingHeader from '@/components/GreetingHeader';
+import Icon from '@/components/ui/Icon';
 import { addDays, dateLabel, localDateStr } from '@/lib/format';
 import { downscaleImage } from '@/lib/image';
 import { createClient } from '@/lib/supabase/client';
@@ -95,7 +97,7 @@ export default function Home() {
     loadUsage();
     // Confirmación post-pago: Stripe regresa con ?upgraded=1.
     if (typeof window !== 'undefined' && window.location.search.includes('upgraded=1')) {
-      setToast('¡Ya eres Pro! 🚀 Analiza sin límites. Gracias por apoyar la app.');
+      setToast('¡Ya eres Pro! Analiza sin límites. Gracias por apoyar la app.');
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, [loadUsage]);
@@ -147,36 +149,41 @@ export default function Home() {
 
   return (
     <main className="container">
-      <header className="banner">
-        <div className="banner-icon" aria-hidden="true">🍽️</div>
-        <div>
-          <h1 className="banner-title">Registro Calórico</h1>
-          <p className="banner-sub">Tu alimentación, analizada con IA</p>
-        </div>
-        <div className="banner-actions">
-          {usage && (
-            <button
-              type="button"
-              className={`usage-badge${usage.plan === 'free' && (usage.remaining ?? 0) <= 3 ? ' low' : ''}`}
-              title="Tu plan y análisis con IA"
-              onClick={() => setShowPlans(true)}
-            >
-              {usage.plan === 'pro'
-                ? '⭐ Pro'
-                : `🤖 ${usage.remaining ?? 0}/${usage.limit ?? 10} análisis IA`}
+      <GreetingHeader
+        subtitle="Tu resumen de hoy"
+        actions={
+          <>
+            {usage && (
+              <button
+                type="button"
+                className={`usage-badge${usage.plan === 'free' && (usage.remaining ?? 0) <= 3 ? ' low' : ''}`}
+                title="Tu plan y análisis con IA"
+                onClick={() => setShowPlans(true)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                {usage.plan === 'pro' ? (
+                  <>
+                    <Icon name="star" size={14} /> Pro
+                  </>
+                ) : (
+                  <>
+                    <Icon name="sparkles" size={14} /> {usage.remaining ?? 0}/{usage.limit ?? 10} análisis IA
+                  </>
+                )}
+              </button>
+            )}
+            <button type="button" className="link-btn" onClick={onLogout}>
+              Salir
             </button>
-          )}
-          <button type="button" className="link-btn" onClick={onLogout}>
-            Salir
-          </button>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       {toast && (
         <div className="toast" role="status">
           <span>{toast}</span>
-          <button type="button" className="link-btn" onClick={() => setToast('')} aria-label="Cerrar aviso">
-            ✕
+          <button type="button" className="link-btn" onClick={() => setToast('')} aria-label="Cerrar aviso" style={{ display: 'inline-flex', alignItems: 'center' }}>
+            <Icon name="close" size={16} />
           </button>
         </div>
       )}
@@ -184,7 +191,9 @@ export default function Home() {
       {profile && targets ? (
         <>
           <button type="button" className="coach-entry" onClick={() => router.push('/coach')}>
-            <span>💬 Habla con Mi Coach</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <Icon name="message" size={18} /> Habla con Mi Coach
+            </span>
             <span aria-hidden="true">›</span>
           </button>
           <CoachTipCard coach={profile.coach} />
@@ -251,8 +260,13 @@ export default function Home() {
         onChange={onPickFile}
       />
       <div className="fab-row">
-        <button type="button" className="btn btn-primary fab" onClick={() => cameraInputRef.current?.click()}>
-          📷 Agregar platillo
+        <button
+          type="button"
+          className="btn btn-primary fab"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+          onClick={() => cameraInputRef.current?.click()}
+        >
+          <Icon name="camera" size={18} /> Agregar platillo
         </button>
         <button
           type="button"
@@ -261,7 +275,7 @@ export default function Home() {
           title="Elegir de la galería"
           onClick={() => galleryInputRef.current?.click()}
         >
-          🖼️
+          <Icon name="image" size={20} />
         </button>
       </div>
 

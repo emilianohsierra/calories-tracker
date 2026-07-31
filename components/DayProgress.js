@@ -17,9 +17,9 @@ export default function DayProgress({ totals, targets }) {
       : `Vas bien: te quedan ${Math.max(remaining, 0)} kcal.`;
 
   const macros = [
-    { key: 'protein', label: 'Proteína', value: totals?.protein_g, goal: targets?.protein_g, color: 'var(--protein)', track: '#F6D9CF' },
-    { key: 'carbs', label: 'Carbos', value: totals?.carbs_g, goal: targets?.carbs_g, color: 'var(--carbs)', track: '#FBEAC9' },
-    { key: 'fat', label: 'Grasa', value: totals?.fat_g, goal: targets?.fat_g, color: 'var(--fat)', track: '#D8DCFB' },
+    { key: 'protein', label: 'Proteína', value: totals?.protein_g, goal: targets?.protein_g, color: 'var(--protein)', track: 'var(--protein-track)' },
+    { key: 'carbs', label: 'Carbos', value: totals?.carbs_g, goal: targets?.carbs_g, color: 'var(--carbs)', track: 'var(--carbs-track)' },
+    { key: 'fat', label: 'Grasa', value: totals?.fat_g, goal: targets?.fat_g, color: 'var(--fat)', track: 'var(--fat-track)' },
   ];
 
   return (

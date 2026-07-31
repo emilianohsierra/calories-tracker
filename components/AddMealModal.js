@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { currentTimeStr } from '@/lib/format';
 import UpgradeModal from '@/components/UpgradeModal';
+import Icon from '@/components/ui/Icon';
 
 const MEAL_TYPES = ['desayuno', 'comida', 'cena', 'snack'];
 
@@ -140,11 +141,11 @@ export default function AddMealModal({ photo, date, usage, resetLabel, onClose, 
               <button type="button" className="btn btn-ghost" onClick={onClose}>
                 Cancelar
               </button>
-              <button type="button" className="btn btn-ghost" onClick={enterManual}>
-                ✍️ A mano
+              <button type="button" className="btn btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={enterManual}>
+                <Icon name="pencil" size={16} /> A mano
               </button>
-              <button type="button" className="btn btn-primary" onClick={onAnalyzeClick}>
-                ✨ Analizar con IA
+              <button type="button" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={onAnalyzeClick}>
+                <Icon name="sparkles" size={16} /> Analizar con IA
               </button>
             </div>
             {usage?.plan === 'free' && (
@@ -247,8 +248,8 @@ export default function AddMealModal({ photo, date, usage, resetLabel, onClose, 
                     }
                   }}
                 />
-                <button type="button" className="btn btn-ghost" disabled={!feedback.trim()} onClick={reanalyze}>
-                  🔁 Reanalizar
+                <button type="button" className="btn btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} disabled={!feedback.trim()} onClick={reanalyze}>
+                  <Icon name="refresh" size={16} /> Reanalizar
                 </button>
               </div>
             </div>

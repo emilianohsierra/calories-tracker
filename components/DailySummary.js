@@ -2,11 +2,12 @@
 
 import { useState } from 'react';
 import { fmt } from '@/lib/format';
+import Icon from '@/components/ui/Icon';
 
 const METER_STATES = {
-  ok: { fill: 'var(--accent)', track: 'var(--accent-track)' },
-  warn: { fill: 'var(--warning)', track: 'var(--warning-track)' },
-  over: { fill: 'var(--critical)', track: 'var(--critical-track)' },
+  ok: { fill: 'var(--brand)', track: 'var(--brand-tint)' },
+  warn: { fill: 'var(--warn-c)', track: 'var(--warn-tint)' },
+  over: { fill: 'var(--over)', track: 'var(--over-tint)' },
 };
 
 export default function DailySummary({ totals, goal, onGoalSave }) {
@@ -31,7 +32,7 @@ export default function DailySummary({ totals, goal, onGoalSave }) {
   return (
     <section className="card" aria-label="Resumen del día">
       <div>
-        <span className="hero-value">{fmt(consumed)}</span>
+        <span className="hero-value num">{fmt(consumed)}</span>
         <span className="hero-unit">kcal</span>
       </div>
       <div className="hero-sub">
@@ -73,20 +74,26 @@ export default function DailySummary({ totals, goal, onGoalSave }) {
       <div className="meter-status">
         {state === 'ok' && (
           <>
-            <span className="status-icon" style={{ color: 'var(--good-text)' }}>✓</span>
+            <span className="status-icon" style={{ color: 'var(--ok)', display: 'inline-flex' }}>
+              <Icon name="check" size={15} />
+            </span>
             <span>Vas bien: te quedan {fmt(remaining)} kcal</span>
           </>
         )}
         {state === 'warn' && (
           <>
-            <span className="status-icon" style={{ color: 'var(--warning)' }}>⚠</span>
+            <span className="status-icon" style={{ color: 'var(--warn-c)', display: 'inline-flex' }}>
+              <Icon name="info" size={15} />
+            </span>
             <span>Cerca de tu meta: te quedan {fmt(Math.max(remaining, 0))} kcal</span>
           </>
         )}
         {state === 'over' && (
           <>
-            <span className="status-icon" style={{ color: 'var(--critical)' }}>▲</span>
-            <span style={{ color: 'var(--critical)' }}>Meta excedida por {fmt(consumed - goal)} kcal</span>
+            <span className="status-icon" style={{ color: 'var(--over)', display: 'inline-flex' }}>
+              <Icon name="info" size={15} />
+            </span>
+            <span style={{ color: 'var(--over)' }}>Meta excedida por {fmt(consumed - goal)} kcal</span>
           </>
         )}
       </div>
@@ -104,7 +111,7 @@ function Tile({ label, value }) {
   return (
     <div className="stat-tile">
       <div className="stat-label">{label}</div>
-      <div className="stat-value">
+      <div className="stat-value num">
         {fmt(value)}
         <span className="unit">g</span>
       </div>
