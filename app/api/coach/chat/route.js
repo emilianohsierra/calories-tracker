@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { assembleContext } from '@/lib/coach/context';
-import { registrarComidaFoto, registrarTexto, actualizarContextoDia, generarCena } from '@/lib/coach/actions';
+import { registrarComidaFoto, registrarTexto, actualizarContextoDia, generarCena, cambiarObjetivo } from '@/lib/coach/actions';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -48,6 +48,24 @@ const GENERAR_CENA_TOOL = {
       n_opciones: { type: 'integer', enum: [1, 2, 3] },
       usar_favoritos: { type: 'boolean' },
       ingredientes_disponibles: { type: 'array', items: { type: 'string' } },
+    },
+  },
+};
+
+// Tool `cambiar_plan` (Opción A del Director): cambia el OBJETIVO/coach y recalcula las
+// metas con el motor. PROPONE antes→después (PlanDiff); se aplica al confirmar en UI.
+// NO sugiere comidas (eso es generar_cena) ni permite override manual de macros.
+const CAMBIAR_PLAN_TOOL = {
+  name: 'cambiar_plan',
+  description:
+    'Cambia el OBJETIVO/coach del usuario y recalcula sus metas con el motor. Úsala cuando pida cambiar de objetivo (perder grasa, ganar músculo, recomposición, runner, bienestar). La proteína y las metas las fija el objetivo (motor); si pide "más proteína", ofrécele cambiar a un objetivo con más proteína. No la uses para sugerir comidas.',
+  input_schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['objetivo', 'nota'],
+    properties: {
+      objetivo: { type: 'string', enum: ['perdida_grasa', 'hipertrofia', 'runner', 'recomposicion', 'bienestar'] },
+      nota: { type: 'string', description: 'Lo que pidió en sus palabras (p.ej. "ganar músculo"). "" si no aplica.' },
     },
   },
 };
@@ -344,7 +362,7 @@ export async function POST(request) {
     const anthropic = new Anthropic({ apiKey });
     // registrar_texto disponible en todo turno; registrar_comida_foto solo con foto
     // pendiente. tool_choice auto (el modelo decide). El chat charla = 1 vuelta (responder).
-    const baseTools = [REGISTRAR_TEXTO_TOOL, ACTUALIZAR_TOOL, GENERAR_CENA_TOOL, RESPONDER_TOOL];
+    const baseTools = [REGISTRAR_TEXTO_TOOL, ACTUALIZAR_TOOL, GENERAR_CENA_TOOL, CAMBIAR_PLAN_TOOL, RESPONDER_TOOL];
     let tools = pendingAnalysis ? [REGISTRAR_FOTO_TOOL, ...baseTools] : baseTools;
     let choice = { type: 'auto' };
     let convo = apiMessages;
@@ -353,6 +371,7 @@ export async function POST(request) {
     let estimate = null; // comida estimada por texto (propuesta, aún sin escribir)
     let actualizado = null; // estado del día actualizado
     let opciones = null; // opciones de generar_cena (propuestas, sin escribir)
+    let planChange = null; // propuesta de cambio de objetivo (sin escribir)
     let lastResp = null;
 
     for (let step = 0; step < MAX_STEPS; step++) {
@@ -369,12 +388,13 @@ export async function POST(request) {
       const toolUses = blocks.filter((b) => b.type === 'tool_use');
 
       // Una sola acción por turno (foto tiene prioridad si hay análisis pendiente).
-      const canAct = !guardado && !estimate && !actualizado && !opciones;
+      const canAct = !guardado && !estimate && !actualizado && !opciones && !planChange;
       const fotoAction = canAct && pendingAnalysis ? toolUses.find((b) => b.name === 'registrar_comida_foto') : null;
       const textoAction = canAct && !fotoAction ? toolUses.find((b) => b.name === 'registrar_texto') : null;
       const cenaAction = canAct && !fotoAction && !textoAction ? toolUses.find((b) => b.name === 'generar_cena') : null;
-      const ctxAction = canAct && !fotoAction && !textoAction && !cenaAction ? toolUses.find((b) => b.name === 'actualizar_contexto_dia') : null;
-      const action = fotoAction || textoAction || cenaAction || ctxAction;
+      const planAction = canAct && !fotoAction && !textoAction && !cenaAction ? toolUses.find((b) => b.name === 'cambiar_plan') : null;
+      const ctxAction = canAct && !fotoAction && !textoAction && !cenaAction && !planAction ? toolUses.find((b) => b.name === 'actualizar_contexto_dia') : null;
+      const action = fotoAction || textoAction || cenaAction || planAction || ctxAction;
       if (action) {
         let exec;
         if (fotoAction) {
@@ -386,6 +406,9 @@ export async function POST(request) {
         } else if (cenaAction) {
           exec = await generarCena({ anthropic, model: COACH_MODEL, input: action.input || {}, ctx });
           if (exec.opciones) opciones = exec.opciones;
+        } else if (planAction) {
+          exec = cambiarObjetivo({ ctx, input: action.input || {} });
+          if (exec.planChange) planChange = exec.planChange;
         } else {
           exec = await actualizarContextoDia({ supabase, userId: user.id, input: action.input || {} });
           if (exec.estado) actualizado = exec.estado;
@@ -465,6 +488,11 @@ export async function POST(request) {
         costo: o.costo,
       }));
     }
+    // Propuesta de cambio de objetivo: el titular lo pone el modelo (o se sintetiza); el
+    // antes→después lo pinta el cliente con PlanDiff desde planChange (números del motor).
+    if (planChange && (!response || !response.titular)) {
+      response = { titular: 'Así quedaría tu plan con ese objetivo. ¿Lo aplico?', bloques: [], accion: { label: '', accion: 'ninguna', ref: '' } };
+    }
     // Estado del día actualizado sin cierre de responder → confirmación mínima.
     if ((!response || !response.titular) && actualizado) {
       response = { titular: 'Anotado.', bloques: [], accion: { label: '', accion: 'ninguna', ref: '' } };
@@ -495,7 +523,7 @@ export async function POST(request) {
     await supabase.from('coach_conversations').update({ last_active_at: new Date().toISOString() }).eq('id', conv.id);
     requestId = null;
 
-    return NextResponse.json({ response, registered: !!guardado });
+    return NextResponse.json({ response, registered: !!guardado, planChange: planChange || null });
   } catch (err) {
     // CUALQUIER excepción → JSON con el error EXACTO (a la burbuja) + logs de Vercel.
     console.error('Coach EXCEPCION:', err?.name, err?.status, err?.message, 'ms=', Date.now() - t0);

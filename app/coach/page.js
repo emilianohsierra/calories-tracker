@@ -6,6 +6,7 @@ import UpgradeModal from '@/components/UpgradeModal';
 import PersonalityPicker from '@/components/coach/PersonalityPicker';
 import MessageRenderer from '@/components/coach/MessageRenderer';
 import MealCard from '@/components/coach/cards/MealCard';
+import PlanDiff from '@/components/PlanDiff';
 import ThemeToggle from '@/components/ThemeToggle';
 import CoachOrb from '@/components/coach/CoachOrb';
 import TypingIndicator from '@/components/coach/TypingIndicator';
@@ -15,7 +16,7 @@ import { downscaleImage } from '@/lib/image';
 import { localDateStr } from '@/lib/format';
 
 // Marcador de versión: oculto por defecto; visible solo con ?debug en la URL.
-const BUILD = 'v16';
+const BUILD = 'v17';
 
 // Saludo contextual determinista (0 IA), anclado a los pendientes de hoy. Sin emojis (Rams §2).
 function greetingText(ctx) {
@@ -98,8 +99,11 @@ export default function CoachPage() {
         setLastBubble({ error: true, diag: data.reason ? `${data.error} (${data.reason})` : data.error });
         return;
       }
-      setLastBubble({ content: data.response ? JSON.stringify(data.response) : '' });
-      if (!data.response) setLastBubble({ error: true, diag: 'respuesta vacía' });
+      if (data.response) {
+        setLastBubble({ content: JSON.stringify(data.response), planChange: data.planChange || null });
+      } else {
+        setLastBubble({ error: true, diag: 'respuesta vacía' });
+      }
       if (data.registered) {
         setPendingAnalysis(null);
         loadUsage(); // el registro cambió el día
@@ -161,6 +165,40 @@ export default function CoachPage() {
       return false;
     }
   };
+
+  // Aplicar cambio de objetivo (confirmación UI): reusa POST /api/profile (motor determinista
+  // recomputa las metas). Números del motor; el chat solo eligió el coach.
+  const applyPlanChange = async (pc, idx) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const cur = await fetch('/api/profile').then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      if (!cur?.profile) return;
+      const merged = { ...cur.profile, coach: pc.objetivo };
+      const res = await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(merged),
+      });
+      if (res.ok) {
+        setMessages((m) => m.map((x, i) => (i === idx ? { ...x, planChange: null, planApplied: true } : x)));
+        fetch('/api/coach/context')
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => {
+            if (d) {
+              setCtx(d);
+              if (d.tone) setTone(d.tone);
+            }
+          })
+          .catch(() => {});
+      }
+    } catch {
+      // no rompe el chat
+    } finally {
+      setBusy(false);
+    }
+  };
+  const cancelPlanChange = (idx) => setMessages((m) => m.map((x, i) => (i === idx ? { ...x, planChange: null } : x)));
 
   // Adjuntar foto → analizar en el chat (reusa /api/analyze) → propuesta para confirmar.
   const onPickFile = async (e) => {
@@ -249,11 +287,27 @@ export default function CoachPage() {
                 <button type="button" className="link-btn" onClick={discardProposal} disabled={busy}>Descartar</button>
               </div>
             ) : m.content ? (
-              <MessageRenderer
-                content={m.content}
-                onAccion={onAccion}
-                onRegisterMeal={m.fromHistory ? undefined : onRegisterMeal}
-              />
+              <>
+                <MessageRenderer
+                  content={m.content}
+                  onAccion={onAccion}
+                  onRegisterMeal={m.fromHistory ? undefined : onRegisterMeal}
+                />
+                {m.planChange && !m.fromHistory && (
+                  <div className="coach-msg">
+                    <PlanDiff prev={m.planChange.prev} next={m.planChange.next} />
+                    <div className="c-card__actions">
+                      <button type="button" className="btn btn-primary" onClick={() => applyPlanChange(m.planChange, i)} disabled={busy}>
+                        Aplicar cambio
+                      </button>
+                      <button type="button" className="link-btn" onClick={() => cancelPlanChange(i)} disabled={busy}>
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {m.planApplied && <span className="ring-caption">Plan actualizado ✓</span>}
+              </>
             ) : busy && i === messages.length - 1 ? (
               <TypingIndicator />
             ) : (
