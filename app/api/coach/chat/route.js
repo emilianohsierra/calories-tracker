@@ -5,10 +5,12 @@ import { createClient } from '@/lib/supabase/server';
 import { assembleContext } from '@/lib/coach/context';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60; // headroom sobre el timeout por defecto del plan (evita cortes)
+export const maxDuration = 60;
 
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5';
-const MAX_TOKENS = 600;
+// Chat FORZADO a Haiku (rápido), independiente de ANTHROPIC_MODEL (que analyze puede
+// tener apuntando a un modelo más lento). Respuesta corta → completa en ~3-5s, sin timeout.
+const COACH_MODEL = 'claude-haiku-4-5';
+const MAX_TOKENS = 800;
 
 export async function POST(request) {
   const supabase = await createClient();
@@ -76,57 +78,38 @@ export async function POST(request) {
     apiMessages.push({ role: 'user', content: `${contextoDia}\n\n${message}` });
   }
 
+  // NON-STREAMING (mismo patrón que /api/analyze, fiable en serverless). Haiku + 800 tok
+  // completa rápido y evita el timeout; el streaming en Vercel queda como follow-up.
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const encoder = new TextEncoder();
+  try {
+    const resp = await anthropic.messages.create({ model: COACH_MODEL, max_tokens: MAX_TOKENS, system, messages: apiMessages });
+    const blocks = resp?.content || [];
+    const text = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
 
-  // STREAMING: los bytes fluyen desde el primer token → evita el timeout de la función
-  // (la referencia de la API de Claude recomienda streaming para prevenir request timeouts).
-  const stream = new ReadableStream({
-    async start(controller) {
-      let full = '';
-      try {
-        const msgStream = anthropic.messages.stream({ model: MODEL, max_tokens: MAX_TOKENS, system, messages: apiMessages });
-        msgStream.on('text', (t) => {
-          full += t;
-          controller.enqueue(encoder.encode(t));
-        });
-        const finalMsg = await msgStream.finalMessage();
-        if (!full) {
-          // Los deltas no emitieron: tomar el texto del mensaje final (autoritativo).
-          const blocks = finalMsg?.content || [];
-          const finalText = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
-          if (finalText) {
-            full = finalText;
-          } else {
-            // No hubo respuesta real → REEMBOLSAR el crédito (no quemar la cuota por un bug).
-            await supabase.rpc('reembolsar_ia', { p_request_id: requestId }).catch(() => {});
-            full = `⚠️ Sin texto. modelo=${MODEL} · stop=${finalMsg?.stop_reason} · bloques=[${blocks.map((b) => `${b.type}:${(b.text || '').length}`).join(', ') || 'ninguno'}]`;
-          }
-          controller.enqueue(encoder.encode(full));
-        }
-        await supabase.from('coach_messages').insert({
-          conversation_id: conv.id,
-          user_id: user.id,
-          role: 'assistant',
-          content: full,
-          tokens_in: finalMsg?.usage?.input_tokens ?? null,
-          tokens_out: finalMsg?.usage?.output_tokens ?? null,
-          model: MODEL,
-        });
-        await supabase.from('coach_conversations').update({ last_active_at: new Date().toISOString() }).eq('id', conv.id);
-      } catch (err) {
-        console.error('Error en el stream del coach:', err);
-        if (!full) {
-          await supabase.rpc('reembolsar_ia', { p_request_id: requestId }).catch(() => {});
-          controller.enqueue(encoder.encode(`⚠️ Error IA: ${err?.status || ''} ${err?.message || 'desconocido'}`.trim()));
-        }
-      } finally {
-        controller.close();
-      }
-    },
-  });
+    if (!text) {
+      // Sin respuesta real → REEMBOLSAR (no quemar cuota) + diagnóstico a pantalla.
+      await supabase.rpc('reembolsar_ia', { p_request_id: requestId }).catch(() => {});
+      const diag = `⚠️ Sin texto. modelo=${COACH_MODEL} · stop=${resp?.stop_reason} · bloques=[${blocks.map((b) => `${b.type}:${(b.text || '').length}`).join(', ') || 'ninguno'}] · roles=${apiMessages.map((m) => m.role).join('>')}`;
+      console.error('Coach vacío:', diag);
+      return NextResponse.json({ text: diag });
+    }
 
-  return new Response(stream, {
-    headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
-  });
+    await supabase.from('coach_messages').insert({
+      conversation_id: conv.id,
+      user_id: user.id,
+      role: 'assistant',
+      content: text,
+      tokens_in: resp?.usage?.input_tokens ?? null,
+      tokens_out: resp?.usage?.output_tokens ?? null,
+      model: COACH_MODEL,
+    });
+    await supabase.from('coach_conversations').update({ last_active_at: new Date().toISOString() }).eq('id', conv.id);
+
+    return NextResponse.json({ text });
+  } catch (err) {
+    console.error('Error IA coach:', err);
+    await supabase.rpc('reembolsar_ia', { p_request_id: requestId }).catch(() => {});
+    const diag = `⚠️ Error IA: ${err?.status || ''} ${err?.name || ''} ${err?.message || 'desconocido'}`.trim();
+    return NextResponse.json({ error: diag }, { status: 502 });
+  }
 }

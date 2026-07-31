@@ -6,7 +6,7 @@ import UpgradeModal from '@/components/UpgradeModal';
 import PersonalityPicker from '@/components/coach/PersonalityPicker';
 
 // Marcador de versión visible: SÚBELO en cada deploy para confirmar qué bundle cargó.
-const BUILD = 'v7';
+const BUILD = 'v8';
 
 // Saludo contextual determinista (0 IA), anclado a los pendientes de hoy.
 function greetingText(ctx) {
@@ -71,29 +71,13 @@ export default function CoachPage() {
         setShowPlans(true);
         return;
       }
-      // Respuesta no-200 (JSON): mostrar el error/diagnóstico real, nunca burbuja en blanco.
-      if (!res.ok || !res.body) {
-        let msg = 'No pude responder ahora. Intenta de nuevo.';
-        try {
-          const e = await res.json();
-          if (e?.error) msg = e.reason ? `${e.error} (${e.reason})` : e.error;
-        } catch {
-          // sin body JSON
-        }
-        setLastBubble(msg);
+      // NON-STREAMING (JSON): mostrar data.text, o el error/diagnóstico real; nunca en blanco.
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setLastBubble(data.error ? (data.reason ? `${data.error} (${data.reason})` : data.error) : 'No pude responder ahora. Intenta de nuevo.');
         return;
       }
-      // STREAMING: pintar tokens conforme llegan.
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let acc = '';
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        acc += decoder.decode(value, { stream: true });
-        setLastBubble(acc);
-      }
-      if (acc.trim() === '') setLastBubble('El coach no devolvió respuesta. Intenta de nuevo.');
+      setLastBubble(data.text || 'El coach no devolvió respuesta. Intenta de nuevo.');
     } catch {
       setLastBubble('No pude responder ahora. Intenta de nuevo.');
     } finally {
