@@ -68,29 +68,13 @@ export default function CoachPage() {
         setShowPlans(true);
         return;
       }
-      // Surfacing del error real (no dejar la burbuja vacía): muestra el mensaje del server.
-      if (!res.ok || !res.body) {
-        let msg = 'No pude responder ahora. Intenta de nuevo.';
-        try {
-          const e = await res.json();
-          if (e?.error) msg = e.reason ? `${e.error} (${e.reason})` : e.error;
-        } catch {
-          // sin body JSON
-        }
-        setLastBubble(msg);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // Surfacing del error/diagnóstico real del server (nunca burbuja en blanco).
+        setLastBubble(data.error ? (data.reason ? `${data.error} (${data.reason})` : data.error) : 'No pude responder ahora. Intenta de nuevo.');
         return;
       }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let acc = '';
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        acc += decoder.decode(value, { stream: true });
-        setLastBubble(acc);
-      }
-      // Nunca dejar la burbuja en blanco aunque el stream venga vacío.
-      if (acc.trim() === '') setLastBubble('El coach no devolvió respuesta. Intenta de nuevo.');
+      setLastBubble(data.text || 'El coach no devolvió respuesta. Intenta de nuevo.');
     } catch {
       setLastBubble('No pude responder ahora. Intenta de nuevo.');
     } finally {
