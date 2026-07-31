@@ -15,7 +15,7 @@ import { downscaleImage } from '@/lib/image';
 import { localDateStr } from '@/lib/format';
 
 // Marcador de versión: oculto por defecto; visible solo con ?debug en la URL.
-const BUILD = 'v14';
+const BUILD = 'v16';
 
 // Saludo contextual determinista (0 IA), anclado a los pendientes de hoy. Sin emojis (Rams §2).
 function greetingText(ctx) {

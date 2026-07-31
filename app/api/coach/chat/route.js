@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { assembleContext } from '@/lib/coach/context';
-import { registrarComidaFoto, registrarTexto } from '@/lib/coach/actions';
+import { registrarComidaFoto, registrarTexto, actualizarContextoDia, generarCena } from '@/lib/coach/actions';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -33,6 +33,25 @@ const REGISTRAR_FOTO_TOOL = {
   },
 };
 
+// Tool `generar_cena` (Karpathy §4.1): sugiere 1–3 opciones que cierran los pendientes.
+// El backend genera (grounding) y FILTRA alérgenos en código; propone como MealCards.
+const GENERAR_CENA_TOOL = {
+  name: 'generar_cena',
+  description:
+    'Sugiere 1 a 3 opciones de comida que cierran los macros pendientes del día, respetando restricciones y preferencias. Úsala cuando la persona pregunte qué comer o cómo cubrir lo que le falta.',
+  input_schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['momento', 'n_opciones', 'usar_favoritos', 'ingredientes_disponibles'],
+    properties: {
+      momento: { type: 'string', enum: ['desayuno', 'comida', 'cena', 'snack'] },
+      n_opciones: { type: 'integer', enum: [1, 2, 3] },
+      usar_favoritos: { type: 'boolean' },
+      ingredientes_disponibles: { type: 'array', items: { type: 'string' } },
+    },
+  },
+};
+
 // Tool `registrar_texto` (Karpathy §4.3): registrar una comida descrita en lenguaje
 // natural. El backend ESTIMA los macros (grounding) y PROPONE; la mutación real ocurre en
 // UI al confirmar (POST /api/meals). Disponible en todo turno (la persona puede contar
@@ -48,6 +67,24 @@ const REGISTRAR_TEXTO_TOOL = {
     properties: {
       descripcion: { type: 'string' },
       momento: { type: 'string', enum: ['desayuno', 'comida', 'cena', 'snack'] },
+    },
+  },
+};
+
+// Tool `actualizar_contexto_dia` (Karpathy §4.5): actualiza un dato del estado de hoy
+// que la persona menciona (agua, entreno, sueño, estrés, hora de comida). Escribe en
+// coach_day_state. No sugiere comida → sin filtro de alérgenos.
+const ACTUALIZAR_TOOL = {
+  name: 'actualizar_contexto_dia',
+  description:
+    'Actualiza un dato del estado de HOY que la persona menciona: agua que tomó (agua_ml = ml que acaba de tomar, se suma), entreno hecho/omitido, horas de sueño, nivel de estrés, u hora de comida. Úsala solo cuando lo cuente.',
+  input_schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['campo', 'valor'],
+    properties: {
+      campo: { type: 'string', enum: ['agua_ml', 'entreno_estado', 'sueno_h', 'estres', 'hora_comida'] },
+      valor: { type: 'string', description: 'Valor como texto; el backend lo valida/parsea según el campo.' },
     },
   },
 };
@@ -307,14 +344,15 @@ export async function POST(request) {
     const anthropic = new Anthropic({ apiKey });
     // registrar_texto disponible en todo turno; registrar_comida_foto solo con foto
     // pendiente. tool_choice auto (el modelo decide). El chat charla = 1 vuelta (responder).
-    let tools = pendingAnalysis
-      ? [REGISTRAR_FOTO_TOOL, REGISTRAR_TEXTO_TOOL, RESPONDER_TOOL]
-      : [REGISTRAR_TEXTO_TOOL, RESPONDER_TOOL];
+    const baseTools = [REGISTRAR_TEXTO_TOOL, ACTUALIZAR_TOOL, GENERAR_CENA_TOOL, RESPONDER_TOOL];
+    let tools = pendingAnalysis ? [REGISTRAR_FOTO_TOOL, ...baseTools] : baseTools;
     let choice = { type: 'auto' };
     let convo = apiMessages;
     let responderInput = null;
     let guardado = null; // foto registrada
     let estimate = null; // comida estimada por texto (propuesta, aún sin escribir)
+    let actualizado = null; // estado del día actualizado
+    let opciones = null; // opciones de generar_cena (propuestas, sin escribir)
     let lastResp = null;
 
     for (let step = 0; step < MAX_STEPS; step++) {
@@ -331,18 +369,26 @@ export async function POST(request) {
       const toolUses = blocks.filter((b) => b.type === 'tool_use');
 
       // Una sola acción por turno (foto tiene prioridad si hay análisis pendiente).
-      const canAct = !guardado && !estimate;
+      const canAct = !guardado && !estimate && !actualizado && !opciones;
       const fotoAction = canAct && pendingAnalysis ? toolUses.find((b) => b.name === 'registrar_comida_foto') : null;
       const textoAction = canAct && !fotoAction ? toolUses.find((b) => b.name === 'registrar_texto') : null;
-      const action = fotoAction || textoAction;
+      const cenaAction = canAct && !fotoAction && !textoAction ? toolUses.find((b) => b.name === 'generar_cena') : null;
+      const ctxAction = canAct && !fotoAction && !textoAction && !cenaAction ? toolUses.find((b) => b.name === 'actualizar_contexto_dia') : null;
+      const action = fotoAction || textoAction || cenaAction || ctxAction;
       if (action) {
         let exec;
         if (fotoAction) {
           exec = await registrarComidaFoto({ supabase, userId: user.id, input: action.input || {}, analysis: pendingAnalysis, ctx });
           if (exec.guardado) guardado = exec.guardado;
-        } else {
+        } else if (textoAction) {
           exec = await registrarTexto({ anthropic, model: COACH_MODEL, input: action.input || {}, ctx });
           if (exec.estimate) estimate = exec.estimate;
+        } else if (cenaAction) {
+          exec = await generarCena({ anthropic, model: COACH_MODEL, input: action.input || {}, ctx });
+          if (exec.opciones) opciones = exec.opciones;
+        } else {
+          exec = await actualizarContextoDia({ supabase, userId: user.id, input: action.input || {} });
+          if (exec.estado) actualizado = exec.estado;
         }
         // Solo se devuelve tool_result para ESTA tool_use (se descartan otras del turno
         // para no dejar tool_use sin respuesta → evita 400 en la vuelta siguiente).
@@ -399,6 +445,29 @@ export async function POST(request) {
           costo: '',
         },
       ];
+    }
+    // Opciones de generar_cena: se FUERZAN como bloques meal con NÚMEROS DEL BACKEND
+    // (grounding filtrado por alérgenos), no los que reescribiera el modelo. Cada MealCard
+    // se registra al confirmar → POST /api/meals.
+    if (opciones && opciones.length) {
+      if (!response || !response.titular) {
+        response = { titular: 'Opciones que cierran tus pendientes de hoy:', bloques: [], accion: { label: '', accion: 'ninguna', ref: '' } };
+      }
+      response.bloques = opciones.slice(0, 3).map((o) => ({
+        tipo: 'meal',
+        titulo: o.titulo,
+        kcal: o.kcal,
+        prot_g: o.prot_g,
+        carb_g: o.carb_g,
+        gras_g: o.gras_g,
+        ingredientes: o.ingredientes,
+        tiempo_min: o.tiempo_min,
+        costo: o.costo,
+      }));
+    }
+    // Estado del día actualizado sin cierre de responder → confirmación mínima.
+    if ((!response || !response.titular) && actualizado) {
+      response = { titular: 'Anotado.', bloques: [], accion: { label: '', accion: 'ninguna', ref: '' } };
     }
 
     if (!response || !response.titular) {
