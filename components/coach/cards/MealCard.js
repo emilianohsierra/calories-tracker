@@ -1,0 +1,45 @@
+'use client';
+
+import { useState } from 'react';
+
+// Tarjeta de comida sugerida (Karpathy §4: bloque `meal`). Título + chips de macros +
+// ingredientes. "Registrar" reusa el guardado existente vía onRegister (POST /api/meals).
+export default function MealCard({ titulo, kcal = 0, prot_g = 0, carb_g = 0, gras_g = 0, ingredientes = [], tiempo_min = 0, costo = '', onRegister }) {
+  const [state, setState] = useState('idle'); // idle | saving | done
+
+  const register = async () => {
+    if (state !== 'idle' || !onRegister) return;
+    setState('saving');
+    try {
+      const ok = await onRegister({ titulo, kcal, prot_g, carb_g, gras_g, ingredientes });
+      setState(ok ? 'done' : 'idle');
+    } catch {
+      setState('idle');
+    }
+  };
+
+  return (
+    <div className="c-card c-card--meal">
+      <div className="c-title">{titulo}</div>
+      <div className="macro-row">
+        <span className="macro-chip num"><i className="macro-dot" style={{ background: 'var(--brand)' }} />{Math.round(kcal)} kcal</span>
+        <span className="macro-chip num"><i className="macro-dot" style={{ background: 'var(--protein)' }} />{Math.round(prot_g)} g P</span>
+        <span className="macro-chip num"><i className="macro-dot" style={{ background: 'var(--carbs)' }} />{Math.round(carb_g)} g C</span>
+        <span className="macro-chip num"><i className="macro-dot" style={{ background: 'var(--fat)' }} />{Math.round(gras_g)} g G</span>
+      </div>
+      {ingredientes?.length > 0 && (
+        <div className="c-subtitle meal-ings">{ingredientes.join(', ')}</div>
+      )}
+      {(tiempo_min > 0 || costo) && (
+        <div className="ring-caption num">{tiempo_min > 0 ? `${Math.round(tiempo_min)} min` : ''}{tiempo_min > 0 && costo ? ' · ' : ''}{costo}</div>
+      )}
+      {onRegister && (
+        <div className="c-card__actions">
+          <button type="button" className="btn btn-primary" onClick={register} disabled={state !== 'idle'}>
+            {state === 'saving' ? 'Registrando…' : state === 'done' ? 'Registrado ✓' : 'Registrar'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

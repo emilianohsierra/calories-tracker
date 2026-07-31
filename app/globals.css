@@ -821,3 +821,140 @@ body {
 .tone-picker { display:flex; gap:var(--s2); padding:var(--s2) var(--s4); overflow-x:auto; border-bottom:1px solid var(--border); background:var(--surface); }
 .tone-chip { flex:0 0 auto; min-height:36px; padding:0 var(--s3); border:1px solid var(--border); border-radius:var(--r-pill); background:var(--surface-2); color:var(--text-2); font-size:13px; font-weight:600; cursor:pointer; }
 .tone-chip[aria-pressed="true"] { border-color:var(--brand); background:var(--brand-tint); color:var(--brand-strong); }
+
+/* ===================== Dark mode (R4) · tokens de Emiliano (Rams §8.1) ===================== */
+/* data-theme="dark" = elección explícita. El @media cubre "Sistema" (sin atributo). */
+[data-theme="dark"] {
+  --page:#0B0D10; --bg:#0B0D10;
+  --surface:#14171C; --surface-2:#1A1E24;
+  --border:rgba(255,255,255,0.08); --border-strong:rgba(255,255,255,0.14);
+  --ink:#E6E8EB; --text:#E6E8EB;
+  --ink-secondary:#A3A8B0; --text-2:#A3A8B0;
+  --ink-muted:#7C828C; --text-3:#7C828C;
+  --gridline:rgba(255,255,255,0.10); --baseline:rgba(255,255,255,0.16);
+  --brand:#2BC4AC; --brand-strong:#4FD8C2; --brand-ink:#06231E; --brand-tint:rgba(43,196,172,0.14);
+  --accent:#2BC4AC; --accent-strong:#4FD8C2; --accent-track:rgba(43,196,172,0.20);
+  --protein:#F0714D; --carbs:#F4B857; --fat:#8A96F5; --fiber:#97C466; --water:#5CBAF5;
+  --ok:#34B36B; --ok-tint:rgba(52,179,107,.16);
+  --warn-c:#E0A63A; --warn-tint:rgba(224,166,58,.16); --warning:#E0A63A; --warning-track:rgba(224,166,58,.16);
+  --over:#E56A6A; --over-tint:rgba(229,106,106,.16); --critical:#E56A6A; --critical-track:rgba(229,106,106,.16);
+  --shadow-1:0 1px 2px rgba(0,0,0,.4); --shadow-2:0 4px 16px rgba(0,0,0,.5); --shadow-3:0 8px 28px rgba(0,0,0,.6);
+  --ring-focus:0 0 0 3px rgba(43,196,172,.4);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page:#0B0D10; --bg:#0B0D10;
+    --surface:#14171C; --surface-2:#1A1E24;
+    --border:rgba(255,255,255,0.08); --border-strong:rgba(255,255,255,0.14);
+    --ink:#E6E8EB; --text:#E6E8EB;
+    --ink-secondary:#A3A8B0; --text-2:#A3A8B0;
+    --ink-muted:#7C828C; --text-3:#7C828C;
+    --gridline:rgba(255,255,255,0.10); --baseline:rgba(255,255,255,0.16);
+    --brand:#2BC4AC; --brand-strong:#4FD8C2; --brand-ink:#06231E; --brand-tint:rgba(43,196,172,0.14);
+    --accent:#2BC4AC; --accent-strong:#4FD8C2; --accent-track:rgba(43,196,172,0.20);
+    --protein:#F0714D; --carbs:#F4B857; --fat:#8A96F5; --fiber:#97C466; --water:#5CBAF5;
+    --ok:#34B36B; --ok-tint:rgba(52,179,107,.16);
+    --warn-c:#E0A63A; --warn-tint:rgba(224,166,58,.16); --warning:#E0A63A; --warning-track:rgba(224,166,58,.16);
+    --over:#E56A6A; --over-tint:rgba(229,106,106,.16); --critical:#E56A6A; --critical-track:rgba(229,106,106,.16);
+    --shadow-1:0 1px 2px rgba(0,0,0,.4); --shadow-2:0 4px 16px rgba(0,0,0,.5); --shadow-3:0 8px 28px rgba(0,0,0,.6);
+    --ring-focus:0 0 0 3px rgba(43,196,172,.4);
+  }
+}
+html, body { transition: background-color var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard); }
+
+/* Toggle de apariencia (segmented) */
+.theme-toggle { display:inline-flex; gap:2px; padding:2px; border-radius:var(--r-pill); background:var(--surface-2); border:1px solid var(--border); }
+.theme-seg { display:inline-flex; align-items:center; gap:6px; min-height:32px; padding:0 10px; border:none; border-radius:var(--r-pill); background:transparent; color:var(--text-2); font-size:12px; font-weight:600; cursor:pointer; }
+.theme-seg[aria-pressed="true"] { background:var(--surface); color:var(--text); box-shadow:var(--shadow-1); }
+.theme-toggle--compact .theme-seg { padding:0 8px; }
+
+/* ===================== Coach · Renderer de mensajes + tarjetas (R1) ===================== */
+.chat-bubble .coach-msg, .chat-bubble .coach-titular, .chat-bubble .md-prose { white-space: normal; }
+.coach-msg { display:flex; flex-direction:column; gap:var(--s2); }
+.coach-titular { font-size:15px; line-height:22px; font-weight:600; color:var(--text); letter-spacing:-.01em; }
+
+/* Tipografía de tarjetas (Rams §1) */
+.c-title    { font-size:15px; line-height:21px; font-weight:600; color:var(--text); letter-spacing:-.01em; }
+.c-subtitle { font-size:13px; line-height:18px; font-weight:500; color:var(--text-2); }
+.c-body     { font-size:14px; line-height:21px; font-weight:400; color:var(--text); }
+.c-data     { font-weight:600; color:var(--text); font-variant-numeric:tabular-nums lining-nums; }
+.c-eyebrow  { font-size:11px; line-height:14px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--text-3); }
+
+/* Contenedor de tarjeta (Rams §4) */
+.c-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-md); padding:var(--s4); box-shadow:var(--shadow-1); display:flex; flex-direction:column; gap:6px; }
+.c-card--nutrition { flex-direction:row; align-items:center; gap:var(--s4); }
+.c-card--nutrition .c-card__body { display:flex; flex-direction:column; gap:2px; }
+.c-card__actions { display:flex; gap:var(--s2); margin-top:6px; }
+.macro-row { display:flex; flex-wrap:wrap; gap:var(--s3); }
+.macro-chip { display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--text); }
+.macro-dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+.meal-ings { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.progress-head { display:flex; align-items:center; justify-content:space-between; gap:var(--s2); }
+
+/* Markdown sanitizado (prosa/legacy/fallback) — nunca sintaxis cruda */
+.md-prose > :first-child { margin-top:0; }
+.md-prose > :last-child { margin-bottom:0; }
+.md-prose .c-body { margin:0 0 6px; }
+.md-list { margin:4px 0 6px; padding-left:18px; }
+.md-list li { margin:2px 0; }
+.md-hr { border:none; border-top:1px solid var(--border); margin:8px 0; }
+.md-table-wrap { overflow-x:auto; }
+.md-table-wrap table { border-collapse:collapse; font-size:13px; }
+.md-table-wrap th, .md-table-wrap td { border:1px solid var(--border); padding:4px 8px; text-align:left; }
+.md-code { background:var(--surface-2); border-radius:4px; padding:1px 4px; font-size:13px; }
+.md-pre { background:var(--surface-2); border-radius:var(--r-sm); padding:var(--s3); overflow-x:auto; }
+.md-pre .md-code { background:none; padding:0; }
+
+/* ===================== Coach · Shell R3 + Estados R5 ===================== */
+/* Cabecera: orbe + título + controles */
+.coach-header .coach-brand { display:flex; align-items:center; gap:var(--s2); }
+.coach-header .coach-controls { display:flex; align-items:center; gap:var(--s2); }
+.coach-orb { display:inline-flex; line-height:0; }
+@keyframes orbBreath { 0%,100%{transform:scale(1)} 50%{transform:scale(1.03)} }
+.coach-orb.animate svg { animation: orbBreath 4s var(--ease-standard) infinite; transform-origin:center; }
+@media (prefers-reduced-motion: reduce) { .coach-orb.animate svg { animation:none; } }
+
+/* Menú de personalidad (bajo botón, no barra fija) */
+.tone-menu { position:relative; }
+.tone-trigger { display:inline-flex; align-items:center; gap:4px; min-height:32px; padding:0 10px; border:1px solid var(--border); border-radius:var(--r-pill); background:var(--surface-2); color:var(--text-2); font-size:12px; font-weight:600; cursor:pointer; }
+.tone-panel { position:absolute; right:0; top:calc(100% + 6px); z-index:20; width:min(280px,80vw); padding:var(--s3); background:var(--surface); border:1px solid var(--border); border-radius:var(--r-md); box-shadow:var(--shadow-2); }
+.tone-chips { display:flex; flex-wrap:wrap; gap:var(--s2); }
+.tone-preview { align-self:flex-start; margin-top:var(--s3); background:var(--surface-2); color:var(--text-2); border:1px dashed var(--border); border-radius:var(--r-md); padding:var(--s3); font-size:14px; line-height:20px; }
+.tone-chip:disabled { opacity:.6; cursor:default; }
+
+/* Composer premium (Rams §5) */
+.coach-composer { align-items:flex-end; gap:var(--s2); }
+.coach-composer textarea { flex:1; min-height:var(--touch); max-height:120px; padding:11px var(--s4); border:1px solid var(--border); border-radius:var(--r-lg); background:var(--surface-2); color:var(--text); font:inherit; font-size:15px; line-height:21px; resize:none; overflow-y:auto; }
+.composer-icon { width:44px; height:44px; flex:0 0 auto; display:grid; place-items:center; border-radius:50%; background:transparent; border:none; color:var(--text-2); cursor:pointer; }
+.composer-icon:disabled { opacity:.4; cursor:default; }
+.composer-send { width:36px; height:36px; flex:0 0 auto; margin-bottom:4px; border-radius:50%; background:var(--brand); color:var(--brand-ink); display:grid; place-items:center; border:none; cursor:pointer; }
+.composer-send:disabled { opacity:.4; cursor:default; }
+
+/* Quick actions: scroll horizontal con snap, sin barra */
+.quick-actions { flex-wrap:nowrap; overflow-x:auto; scroll-snap-type:x proximity; -ms-overflow-style:none; scrollbar-width:none; padding:0 var(--s4) var(--s2); margin:0; }
+.quick-actions::-webkit-scrollbar { display:none; }
+.quick-actions .chip-action { scroll-snap-align:start; white-space:nowrap; flex:0 0 auto; }
+
+/* Typing (Rams §10.1) */
+.coach-typing-wrap { display:inline-flex; align-items:center; gap:var(--s2); }
+.coach-typing { display:inline-flex; gap:4px; align-items:center; }
+.coach-typing i { width:6px; height:6px; border-radius:50%; background:var(--text-3); animation: coachDot 1.2s infinite; }
+.coach-typing i:nth-child(2){ animation-delay:.15s } .coach-typing i:nth-child(3){ animation-delay:.3s }
+.coach-typing-msg { font-size:13px; color:var(--text-2); }
+@keyframes coachDot { 0%,60%,100%{opacity:.3;transform:translateY(0)} 30%{opacity:1;transform:translateY(-3px)} }
+@media (prefers-reduced-motion: reduce) { .coach-typing i { animation:none; opacity:.6 } }
+
+/* Error humano (Rams §10.2) — neutro, con reintento */
+.chat-error { color:var(--text-2); display:flex; flex-direction:column; gap:var(--s1); }
+.chat-error .retry { align-self:flex-start; margin-top:var(--s2); font-weight:600; color:var(--brand-strong); }
+
+/* Entrada de mensaje: fade-in sutil */
+@keyframes bubbleIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+.coach-thread > .chat-bubble { animation: bubbleIn var(--dur-base) var(--ease-standard); }
+@media (prefers-reduced-motion: reduce) { .coach-thread > .chat-bubble { animation:none; } }
+
+/* Responsive (Rams §11): tablet/desktop más ancho, burbujas más estrechas */
+@media (min-width: 640px) {
+  .coach-shell { max-width: 640px; }
+  .chat-bubble { max-width: 70%; }
+}
