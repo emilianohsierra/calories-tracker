@@ -107,16 +107,20 @@ export async function POST(request) {
           controller.enqueue(encoder.encode(t));
         });
         const finalMsg = await msgStream.finalMessage();
-        // Robustez: si el streaming de deltas no emitió texto, tomarlo del mensaje final
-        // (autoritativo) para que el cliente SIEMPRE reciba la respuesta.
+        // Robustez: si el streaming de deltas no emitió texto, tomarlo del mensaje final.
         if (!full) {
-          const finalText = (finalMsg?.content || [])
-            .filter((b) => b.type === 'text')
-            .map((b) => b.text)
-            .join('')
-            .trim();
-          full = finalText || 'No pude generar una respuesta esta vez. Intenta de nuevo.';
-          controller.enqueue(encoder.encode(full));
+          const blocks = finalMsg?.content || [];
+          const finalText = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
+          if (finalText) {
+            full = finalText;
+            controller.enqueue(encoder.encode(finalText));
+          } else {
+            // DIAGNÓSTICO TEMPORAL: por qué vuelve vacío (a pantalla + logs de Vercel).
+            const diag = `⚠️ Sin texto de la IA. modelo=${MODEL} · stop=${finalMsg?.stop_reason} · bloques=[${blocks.map((b) => `${b.type}:${(b.text || '').length}`).join(', ') || 'ninguno'}] · msgs=${apiMessages.length} · roles=${apiMessages.map((m) => m.role).join('>')} · usage=${JSON.stringify(finalMsg?.usage || {})}`;
+            console.error('Coach vacío:', diag);
+            full = diag;
+            controller.enqueue(encoder.encode(diag));
+          }
         }
         await supabase.from('coach_messages').insert({
           conversation_id: conv.id,
@@ -136,7 +140,9 @@ export async function POST(request) {
         // Fallo SIN salida → reembolsar el crédito reservado (no hubo respuesta).
         if (!full) {
           await supabase.rpc('reembolsar_ia', { p_request_id: requestId }).catch(() => {});
-          controller.enqueue(encoder.encode('Perdona, no pude responder ahora. Intenta de nuevo.'));
+          // DIAGNÓSTICO TEMPORAL: mostrar el error real de la API en pantalla.
+          const diag = `⚠️ Error IA: ${err?.status || ''} ${err?.name || ''} ${err?.message || 'desconocido'}`.trim();
+          controller.enqueue(encoder.encode(diag));
         }
       } finally {
         controller.close();
