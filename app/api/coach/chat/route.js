@@ -95,7 +95,13 @@ export async function POST(request) {
           // Los deltas no emitieron: tomar el texto del mensaje final (autoritativo).
           const blocks = finalMsg?.content || [];
           const finalText = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
-          full = finalText || `⚠️ Sin texto. modelo=${MODEL} · stop=${finalMsg?.stop_reason} · bloques=[${blocks.map((b) => `${b.type}:${(b.text || '').length}`).join(', ') || 'ninguno'}]`;
+          if (finalText) {
+            full = finalText;
+          } else {
+            // No hubo respuesta real → REEMBOLSAR el crédito (no quemar la cuota por un bug).
+            await supabase.rpc('reembolsar_ia', { p_request_id: requestId }).catch(() => {});
+            full = `⚠️ Sin texto. modelo=${MODEL} · stop=${finalMsg?.stop_reason} · bloques=[${blocks.map((b) => `${b.type}:${(b.text || '').length}`).join(', ') || 'ninguno'}]`;
+          }
           controller.enqueue(encoder.encode(full));
         }
         await supabase.from('coach_messages').insert({

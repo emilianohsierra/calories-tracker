@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import UpgradeModal from '@/components/UpgradeModal';
 import PersonalityPicker from '@/components/coach/PersonalityPicker';
 
+// Marcador de versión visible: SÚBELO en cada deploy para confirmar qué bundle cargó.
+const BUILD = 'v7';
+
 // Saludo contextual determinista (0 IA), anclado a los pendientes de hoy.
 function greetingText(ctx) {
   if (ctx?.pending) {
@@ -105,7 +108,7 @@ export default function CoachPage() {
           ‹ Inicio
         </button>
         <span className="coach-title">Mi Coach</span>
-        <span />
+        <span style={{ fontSize: 11, color: 'var(--text-3)' }}>build {BUILD}</span>
       </header>
 
       <PersonalityPicker value={tone} onChange={setTone} />
