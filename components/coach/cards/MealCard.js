@@ -33,12 +33,16 @@ export default function MealCard({ titulo, kcal = 0, prot_g = 0, carb_g = 0, gra
       {(tiempo_min > 0 || costo) && (
         <div className="ring-caption num">{tiempo_min > 0 ? `${Math.round(tiempo_min)} min` : ''}{tiempo_min > 0 && costo ? ' · ' : ''}{costo}</div>
       )}
-      {onRegister && (
+      {onRegister ? (
         <div className="c-card__actions">
           <button type="button" className="btn btn-primary" onClick={register} disabled={state !== 'idle'}>
             {state === 'saving' ? 'Registrando…' : state === 'done' ? 'Registrado ✓' : 'Registrar'}
           </button>
         </div>
+      ) : (
+        // Sin acción viva (p.ej. propuesta cargada del historial): registro/estimación no
+        // accionable, para no duplicar la comida al recargar.
+        <div className="ring-caption">Estimado</div>
       )}
     </div>
   );

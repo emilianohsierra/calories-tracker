@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { assembleContext } from '@/lib/coach/context';
-import { registrarComidaFoto } from '@/lib/coach/actions';
+import { registrarComidaFoto, registrarTexto } from '@/lib/coach/actions';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -29,6 +29,25 @@ const REGISTRAR_FOTO_TOOL = {
       analisis_id: { type: 'string', description: 'Usa "foto" para el análisis pendiente del turno.' },
       momento: { type: 'string', enum: ['desayuno', 'comida', 'cena', 'snack'] },
       correccion: { type: 'string', description: 'Corrección opcional de la persona. "" si registra tal cual.' },
+    },
+  },
+};
+
+// Tool `registrar_texto` (Karpathy §4.3): registrar una comida descrita en lenguaje
+// natural. El backend ESTIMA los macros (grounding) y PROPONE; la mutación real ocurre en
+// UI al confirmar (POST /api/meals). Disponible en todo turno (la persona puede contar
+// lo que comió en cualquier momento).
+const REGISTRAR_TEXTO_TOOL = {
+  name: 'registrar_texto',
+  description:
+    'Registra una comida que la persona describe en texto (lo que YA comió). Úsala solo cuando cuente una comida y quiera registrarla, no en charla general. El backend estima los macros; no los inventes tú.',
+  input_schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['descripcion', 'momento'],
+    properties: {
+      descripcion: { type: 'string' },
+      momento: { type: 'string', enum: ['desayuno', 'comida', 'cena', 'snack'] },
     },
   },
 };
@@ -286,13 +305,16 @@ export async function POST(request) {
     // acciones (reusando lo existente) y CIERRA el turno con la tool `responder`.
     // Topes duros (MAX_STEPS + TIME_BUDGET_MS) para no pasarnos del límite serverless.
     const anthropic = new Anthropic({ apiKey });
-    let tools = pendingAnalysis ? [REGISTRAR_FOTO_TOOL, RESPONDER_TOOL] : [RESPONDER_TOOL];
-    // Sin análisis pendiente: se fuerza responder (turno único, igual que antes). Con
-    // análisis: auto (puede registrar y luego responder).
-    let choice = pendingAnalysis ? { type: 'auto' } : { type: 'tool', name: 'responder' };
+    // registrar_texto disponible en todo turno; registrar_comida_foto solo con foto
+    // pendiente. tool_choice auto (el modelo decide). El chat charla = 1 vuelta (responder).
+    let tools = pendingAnalysis
+      ? [REGISTRAR_FOTO_TOOL, REGISTRAR_TEXTO_TOOL, RESPONDER_TOOL]
+      : [REGISTRAR_TEXTO_TOOL, RESPONDER_TOOL];
+    let choice = { type: 'auto' };
     let convo = apiMessages;
     let responderInput = null;
-    let guardado = null;
+    let guardado = null; // foto registrada
+    let estimate = null; // comida estimada por texto (propuesta, aún sin escribir)
     let lastResp = null;
 
     for (let step = 0; step < MAX_STEPS; step++) {
@@ -308,11 +330,20 @@ export async function POST(request) {
       const blocks = lastResp?.content || [];
       const toolUses = blocks.filter((b) => b.type === 'tool_use');
 
-      // Acción de registro (solo una vez, y solo si hay análisis pendiente).
-      const action = !guardado && pendingAnalysis ? toolUses.find((b) => b.name === 'registrar_comida_foto') : null;
+      // Una sola acción por turno (foto tiene prioridad si hay análisis pendiente).
+      const canAct = !guardado && !estimate;
+      const fotoAction = canAct && pendingAnalysis ? toolUses.find((b) => b.name === 'registrar_comida_foto') : null;
+      const textoAction = canAct && !fotoAction ? toolUses.find((b) => b.name === 'registrar_texto') : null;
+      const action = fotoAction || textoAction;
       if (action) {
-        const exec = await registrarComidaFoto({ supabase, userId: user.id, input: action.input || {}, analysis: pendingAnalysis, ctx });
-        if (exec.guardado) guardado = exec.guardado;
+        let exec;
+        if (fotoAction) {
+          exec = await registrarComidaFoto({ supabase, userId: user.id, input: action.input || {}, analysis: pendingAnalysis, ctx });
+          if (exec.guardado) guardado = exec.guardado;
+        } else {
+          exec = await registrarTexto({ anthropic, model: COACH_MODEL, input: action.input || {}, ctx });
+          if (exec.estimate) estimate = exec.estimate;
+        }
         // Solo se devuelve tool_result para ESTA tool_use (se descartan otras del turno
         // para no dejar tool_use sin respuesta → evita 400 en la vuelta siguiente).
         const assistantContent = blocks.filter((b) => b.type === 'text' || (b.type === 'tool_use' && b.id === action.id));
@@ -321,7 +352,7 @@ export async function POST(request) {
           { role: 'assistant', content: assistantContent },
           { role: 'user', content: [{ type: 'tool_result', tool_use_id: action.id, content: JSON.stringify(exec.toolResult) }] },
         ];
-        // Tras registrar: forzar cierre con responder (sin re-ofrecer la tool → sin doble alta).
+        // Tras actuar: forzar cierre con responder (sin re-ofrecer tools → sin repetición).
         tools = [RESPONDER_TOOL];
         choice = { type: 'tool', name: 'responder' };
         continue;
@@ -340,7 +371,7 @@ export async function POST(request) {
     }
 
     let response = responderInput ? normalizeResponse(responderInput) : null;
-    // Si registramos pero el modelo no cerró con responder (p.ej. corte por tiempo),
+    // Si registramos foto pero el modelo no cerró con responder (p.ej. corte por tiempo),
     // sintetizamos una confirmación con números del backend (no del modelo).
     if ((!response || !response.titular) && guardado) {
       response = {
@@ -348,6 +379,26 @@ export async function POST(request) {
         bloques: [],
         accion: { label: '', accion: 'ninguna', ref: '' },
       };
+    }
+    // Propuesta por texto: se FUERZA el bloque meal con NÚMEROS DEL BACKEND (estimación),
+    // no los que pudiera reescribir el modelo. La MealCard confirma → POST /api/meals.
+    if (estimate) {
+      if (!response || !response.titular) {
+        response = { titular: `Estimé "${estimate.titulo}". Confírmalo para registrarlo.`, bloques: [], accion: { label: '', accion: 'ninguna', ref: '' } };
+      }
+      response.bloques = [
+        {
+          tipo: 'meal',
+          titulo: estimate.titulo,
+          kcal: estimate.kcal,
+          prot_g: estimate.prot_g,
+          carb_g: estimate.carb_g,
+          gras_g: estimate.gras_g,
+          ingredientes: estimate.ingredientes,
+          tiempo_min: 0,
+          costo: '',
+        },
+      ];
     }
 
     if (!response || !response.titular) {

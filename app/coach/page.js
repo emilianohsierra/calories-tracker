@@ -12,9 +12,10 @@ import TypingIndicator from '@/components/coach/TypingIndicator';
 import QuickActions from '@/components/coach/QuickActions';
 import Composer from '@/components/coach/Composer';
 import { downscaleImage } from '@/lib/image';
+import { localDateStr } from '@/lib/format';
 
 // Marcador de versión: oculto por defecto; visible solo con ?debug en la URL.
-const BUILD = 'v12';
+const BUILD = 'v14';
 
 // Saludo contextual determinista (0 IA), anclado a los pendientes de hoy. Sin emojis (Rams §2).
 function greetingText(ctx) {
@@ -42,8 +43,10 @@ export default function CoachPage() {
   useEffect(() => {
     setDebug(typeof window !== 'undefined' && window.location.search.includes('debug'));
     fetch('/api/coach/history')
+      // fromHistory: las propuestas cargadas del historial NO son accionables (evita
+      // doble alta al recargar). Solo la propuesta FRESCA de la sesión registra.
       .then((r) => (r.ok ? r.json() : { messages: [] }))
-      .then((d) => setMessages(d.messages || []))
+      .then((d) => setMessages((d.messages || []).map((m) => ({ ...m, fromHistory: true }))))
       .catch(() => {});
     fetch('/api/coach/context')
       .then((r) => (r.ok ? r.json() : null))
@@ -129,6 +132,34 @@ export default function CoachPage() {
   const onAccion = (accion, prompt) => {
     if (accion?.accion === 'cambiar_plan') return router.push('/perfil');
     if (prompt) send(prompt);
+  };
+
+  // "Registrar" de una MealCard propuesta por el coach (p.ej. registrar_texto): confirma
+  // la mutación reusando POST /api/meals. Números del backend (estimación), no del chat.
+  const onRegisterMeal = async (m) => {
+    try {
+      const now = new Date();
+      const res = await fetch('/api/meals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: localDateStr(now),
+          time: now.toTimeString().slice(0, 5),
+          title: m.titulo,
+          calories: m.kcal,
+          protein_g: m.prot_g,
+          carbs_g: m.carb_g,
+          fat_g: m.gras_g,
+          ingredients: m.ingredientes,
+          meal_type: 'comida',
+          confidence: 'estimado',
+        }),
+      });
+      if (res.ok) loadUsage();
+      return res.ok;
+    } catch {
+      return false;
+    }
   };
 
   // Adjuntar foto → analizar en el chat (reusa /api/analyze) → propuesta para confirmar.
@@ -218,7 +249,11 @@ export default function CoachPage() {
                 <button type="button" className="link-btn" onClick={discardProposal} disabled={busy}>Descartar</button>
               </div>
             ) : m.content ? (
-              <MessageRenderer content={m.content} onAccion={onAccion} />
+              <MessageRenderer
+                content={m.content}
+                onAccion={onAccion}
+                onRegisterMeal={m.fromHistory ? undefined : onRegisterMeal}
+              />
             ) : busy && i === messages.length - 1 ? (
               <TypingIndicator />
             ) : (
