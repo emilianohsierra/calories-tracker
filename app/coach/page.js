@@ -44,6 +44,13 @@ export default function CoachPage() {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
   }, [messages]);
 
+  const setLastBubble = (content) =>
+    setMessages((m) => {
+      const copy = m.slice();
+      if (copy.length) copy[copy.length - 1] = { role: 'assistant', content };
+      return copy;
+    });
+
   const send = async () => {
     const text = input.trim();
     if (!text || busy) return;
@@ -61,7 +68,18 @@ export default function CoachPage() {
         setShowPlans(true);
         return;
       }
-      if (!res.ok || !res.body) throw new Error('fallo');
+      // Surfacing del error real (no dejar la burbuja vacía): muestra el mensaje del server.
+      if (!res.ok || !res.body) {
+        let msg = 'No pude responder ahora. Intenta de nuevo.';
+        try {
+          const e = await res.json();
+          if (e?.error) msg = e.reason ? `${e.error} (${e.reason})` : e.error;
+        } catch {
+          // sin body JSON
+        }
+        setLastBubble(msg);
+        return;
+      }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let acc = '';
@@ -69,18 +87,12 @@ export default function CoachPage() {
         const { done, value } = await reader.read();
         if (done) break;
         acc += decoder.decode(value, { stream: true });
-        setMessages((m) => {
-          const copy = m.slice();
-          copy[copy.length - 1] = { role: 'assistant', content: acc };
-          return copy;
-        });
+        setLastBubble(acc);
       }
+      // Nunca dejar la burbuja en blanco aunque el stream venga vacío.
+      if (acc.trim() === '') setLastBubble('El coach no devolvió respuesta. Intenta de nuevo.');
     } catch {
-      setMessages((m) => {
-        const copy = m.slice();
-        copy[copy.length - 1] = { role: 'assistant', content: 'No pude responder ahora. Intenta de nuevo.' };
-        return copy;
-      });
+      setLastBubble('No pude responder ahora. Intenta de nuevo.');
     } finally {
       setBusy(false);
     }

@@ -47,8 +47,11 @@ export async function POST(request) {
         { status: 402 }
       );
     }
-    // kill_switch / global_cap → no exponer detalle
-    return NextResponse.json({ error: 'El coach no está disponible por el momento.' }, { status: 503 });
+    // kill_switch / global_cap / config_missing → mensaje genérico + reason para diagnóstico
+    return NextResponse.json(
+      { error: 'El coach no está disponible por el momento.', reason: gate.reason },
+      { status: 503 }
+    );
   }
 
   // --- Conversación (get-or-create; 1 hilo por usuario en F1) ---
@@ -104,6 +107,17 @@ export async function POST(request) {
           controller.enqueue(encoder.encode(t));
         });
         const finalMsg = await msgStream.finalMessage();
+        // Robustez: si el streaming de deltas no emitió texto, tomarlo del mensaje final
+        // (autoritativo) para que el cliente SIEMPRE reciba la respuesta.
+        if (!full) {
+          const finalText = (finalMsg?.content || [])
+            .filter((b) => b.type === 'text')
+            .map((b) => b.text)
+            .join('')
+            .trim();
+          full = finalText || 'No pude generar una respuesta esta vez. Intenta de nuevo.';
+          controller.enqueue(encoder.encode(full));
+        }
         await supabase.from('coach_messages').insert({
           conversation_id: conv.id,
           user_id: user.id,
