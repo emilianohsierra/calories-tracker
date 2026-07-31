@@ -3,19 +3,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import UpgradeModal from '@/components/UpgradeModal';
-import AddMealModal from '@/components/AddMealModal';
 import PersonalityPicker from '@/components/coach/PersonalityPicker';
 import MessageRenderer from '@/components/coach/MessageRenderer';
+import MealCard from '@/components/coach/cards/MealCard';
 import ThemeToggle from '@/components/ThemeToggle';
 import CoachOrb from '@/components/coach/CoachOrb';
 import TypingIndicator from '@/components/coach/TypingIndicator';
 import QuickActions from '@/components/coach/QuickActions';
 import Composer from '@/components/coach/Composer';
 import { downscaleImage } from '@/lib/image';
-import { localDateStr } from '@/lib/format';
 
 // Marcador de versión: oculto por defecto; visible solo con ?debug en la URL.
-const BUILD = 'v11';
+const BUILD = 'v12';
 
 // Saludo contextual determinista (0 IA), anclado a los pendientes de hoy. Sin emojis (Rams §2).
 function greetingText(ctx) {
@@ -35,7 +34,7 @@ export default function CoachPage() {
   const [ctx, setCtx] = useState(null);
   const [tone, setTone] = useState('amigable');
   const [debug, setDebug] = useState(false);
-  const [photo, setPhoto] = useState(null); // { url, blob }
+  const [pendingAnalysis, setPendingAnalysis] = useState(null);
   const [usage, setUsage] = useState(null);
   const threadRef = useRef(null);
   const fileRef = useRef(null);
@@ -76,14 +75,14 @@ export default function CoachPage() {
       return copy;
     });
 
-  // Fetch del turno (reutilizado por send y por Reintentar).
-  const runChat = async (text) => {
+  // Fetch del turno (reutilizado por send y por Reintentar). `analysis` = foto pendiente.
+  const runChat = async (text, analysis) => {
     setBusy(true);
     try {
       const res = await fetch('/api/coach/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, ...(analysis ? { pendingAnalysis: analysis } : {}) }),
       });
       if (res.status === 402) {
         setMessages((m) => m.slice(0, -1)); // quita la burbuja vacía del coach
@@ -98,6 +97,10 @@ export default function CoachPage() {
       }
       setLastBubble({ content: data.response ? JSON.stringify(data.response) : '' });
       if (!data.response) setLastBubble({ error: true, diag: 'respuesta vacía' });
+      if (data.registered) {
+        setPendingAnalysis(null);
+        loadUsage(); // el registro cambió el día
+      }
     } catch (e) {
       console.error('Coach fetch fail:', e);
       setLastBubble({ error: true, diag: String(e?.message || e) });
@@ -106,12 +109,12 @@ export default function CoachPage() {
     }
   };
 
-  const send = (override) => {
+  const send = (override, analysis) => {
     const text = (typeof override === 'string' ? override : input).trim();
     if (!text || busy) return;
     if (typeof override !== 'string') setInput('');
     setMessages((m) => [...m, { role: 'user', content: text }, { role: 'assistant', content: '' }]);
-    runChat(text);
+    runChat(text, analysis);
   };
 
   const retry = () => {
@@ -128,48 +131,51 @@ export default function CoachPage() {
     if (prompt) send(prompt);
   };
 
-  // "Registrar" de una MealCard: reusa el guardado existente (POST /api/meals).
-  const onRegisterMeal = async (m) => {
-    try {
-      const now = new Date();
-      const res = await fetch('/api/meals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          date: localDateStr(now),
-          time: now.toTimeString().slice(0, 5),
-          title: m.titulo,
-          calories: m.kcal,
-          protein_g: m.prot_g,
-          carbs_g: m.carb_g,
-          fat_g: m.gras_g,
-          ingredients: m.ingredientes,
-          meal_type: 'comida',
-          confidence: 'coach',
-        }),
-      });
-      return res.ok;
-    } catch {
-      return false;
-    }
-  };
-
-  // Adjuntar/analizar comida: abre cámara/galería → AddMealModal (reusa el flujo de HOME).
+  // Adjuntar foto → analizar en el chat (reusa /api/analyze) → propuesta para confirmar.
   const onPickFile = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file) return;
+    if (!file || busy) return;
+    let blob;
     try {
-      const blob = await downscaleImage(file);
-      setPhoto({ url: URL.createObjectURL(blob), blob });
+      blob = await downscaleImage(file);
     } catch {
-      // sin foto: no rompe el chat
+      return; // no rompe el chat
+    }
+    setMessages((m) => [...m, { role: 'user', content: 'Analiza esta foto.' }, { role: 'assistant', content: '' }]);
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('image', blob, 'platillo.jpg');
+      const res = await fetch('/api/analyze', { method: 'POST', body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 429 || res.status === 402) {
+        setMessages((m) => m.slice(0, -2)); // quita "Analiza esta foto." + burbuja vacía
+        setShowPlans(true);
+        return;
+      }
+      if (!res.ok || data.error || data.es_comida === false) {
+        setLastBubble({ error: true, diag: data.error || 'no se pudo analizar' });
+        return;
+      }
+      setPendingAnalysis(data);
+      setLastBubble({ proposal: data });
+    } catch (err) {
+      setLastBubble({ error: true, diag: String(err?.message || err) });
+    } finally {
+      setBusy(false);
     }
   };
-  const closeModal = () => {
-    if (photo) URL.revokeObjectURL(photo.url);
-    setPhoto(null);
-    loadUsage();
+
+  // Confirmación en UI ANTES de mutar: registrar la foto vía el coach (tool-use).
+  const confirmRegister = (analysis) => {
+    setMessages((m) => m.filter((x) => !x.proposal));
+    send('Registra la comida de la foto.', analysis);
+    return true;
+  };
+  const discardProposal = () => {
+    setMessages((m) => m.filter((x) => !x.proposal));
+    setPendingAnalysis(null);
   };
 
   return (
@@ -197,8 +203,22 @@ export default function CoachPage() {
                 <button type="button" className="link-btn retry" onClick={retry} disabled={busy}>Reintentar</button>
                 {debug && m.diag && <span className="ring-caption">{m.diag}</span>}
               </div>
+            ) : m.proposal ? (
+              <div className="coach-msg">
+                <div className="coach-titular">Esto detecté en tu foto. ¿Lo registro?</div>
+                <MealCard
+                  titulo={m.proposal.titulo}
+                  kcal={m.proposal.calorias}
+                  prot_g={m.proposal.proteinas_g}
+                  carb_g={m.proposal.carbohidratos_g}
+                  gras_g={m.proposal.grasas_g}
+                  ingredientes={m.proposal.ingredientes}
+                  onRegister={() => confirmRegister(m.proposal)}
+                />
+                <button type="button" className="link-btn" onClick={discardProposal} disabled={busy}>Descartar</button>
+              </div>
             ) : m.content ? (
-              <MessageRenderer content={m.content} onAccion={onAccion} onRegisterMeal={onRegisterMeal} />
+              <MessageRenderer content={m.content} onAccion={onAccion} />
             ) : busy && i === messages.length - 1 ? (
               <TypingIndicator />
             ) : (
@@ -225,16 +245,6 @@ export default function CoachPage() {
 
       <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={onPickFile} />
 
-      {photo && (
-        <AddMealModal
-          photo={photo}
-          date={localDateStr(new Date())}
-          usage={usage}
-          resetLabel={usage?.resets_on}
-          onClose={closeModal}
-          onSaved={closeModal}
-        />
-      )}
       {showPlans && <UpgradeModal variant="plans" usage={usage || { plan: 'free' }} onClose={() => setShowPlans(false)} />}
     </main>
   );

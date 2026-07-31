@@ -3,12 +3,56 @@ import crypto from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { assembleContext } from '@/lib/coach/context';
+import { registrarComidaFoto } from '@/lib/coach/actions';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 const COACH_MODEL = 'claude-haiku-4-5';
 const MAX_TOKENS = 800;
+// Tool-use = varias vueltas a Anthropic. Topes para NO pasarnos del límite serverless.
+const MAX_STEPS = 4;
+const TIME_BUDGET_MS = 45000;
+
+// Tool `registrar_comida_foto` (Karpathy §4.2): registra una comida a partir de un
+// análisis de foto ya realizado (reusa /api/analyze en cliente + /api/meals en backend).
+// Solo se ofrece cuando el request trae un análisis pendiente.
+const REGISTRAR_FOTO_TOOL = {
+  name: 'registrar_comida_foto',
+  description:
+    'Registra una comida a partir de un análisis de foto ya realizado. Úsala solo cuando exista un análisis pendiente (analisis_id="foto") y la persona quiera guardarlo. Los macros salen del análisis, no los inventes.',
+  input_schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['analisis_id', 'momento', 'correccion'],
+    properties: {
+      analisis_id: { type: 'string', description: 'Usa "foto" para el análisis pendiente del turno.' },
+      momento: { type: 'string', enum: ['desayuno', 'comida', 'cena', 'snack'] },
+      correccion: { type: 'string', description: 'Corrección opcional de la persona. "" si registra tal cual.' },
+    },
+  },
+};
+
+// Sanea el análisis pendiente que manda el cliente (viene de /api/analyze; son datos del
+// propio usuario, pero se acotan). Devuelve null si no es utilizable.
+function sanitizePendingAnalysis(p) {
+  if (!p || typeof p !== 'object') return null;
+  const numOr0 = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  const titulo = String(p.titulo || '').trim().slice(0, 120);
+  if (!titulo) return null;
+  return {
+    titulo,
+    descripcion: String(p.descripcion || '').slice(0, 600),
+    tipo_comida: String(p.tipo_comida || ''),
+    calorias: numOr0(p.calorias),
+    proteinas_g: numOr0(p.proteinas_g),
+    carbohidratos_g: numOr0(p.carbohidratos_g),
+    grasas_g: numOr0(p.grasas_g),
+    ingredientes: Array.isArray(p.ingredientes) ? p.ingredientes.slice(0, 20).map((s) => String(s).slice(0, 60)) : [],
+    confianza: String(p.confianza || '').slice(0, 10),
+    imagen: String(p.imagen || '').replace(/[^a-zA-Z0-9.-]/g, ''),
+  };
+}
 
 // Tool `responder` (Karpathy, plan/coach-salida-formato.md §4): el coach responde
 // SIEMPRE con esta estructura de tarjetas — 0 Markdown crudo, 0 emojis. El frontend
@@ -187,6 +231,7 @@ export async function POST(request) {
     }
     const message = String(body?.message || '').trim().slice(0, 2000);
     if (!message) return NextResponse.json({ error: 'Escribe un mensaje' }, { status: 400 });
+    const pendingAnalysis = sanitizePendingAnalysis(body?.pendingAnalysis);
 
     // CAP DE COSTO DURO: reserva atómica.
     requestId = crypto.randomUUID();
@@ -223,48 +268,98 @@ export async function POST(request) {
 
     await supabase.from('coach_messages').insert({ conversation_id: conv.id, user_id: user.id, role: 'user', content: message });
 
-    const { system, contextoDia, history } = await assembleContext(supabase, user.id, conv.id);
+    const { system, contextoDia, history, ctx } = await assembleContext(supabase, user.id, conv.id);
     const apiMessages = history.map((m) => ({ role: m.role, content: m.content }));
+    // Nota volátil de análisis pendiente (va con el turno del usuario, tras la caché).
+    const analisisNota = pendingAnalysis
+      ? `\n<analisis_pendiente>Hay un análisis de foto listo para registrar (analisis_id="foto"): "${pendingAnalysis.titulo}" · ${Math.round(pendingAnalysis.calorias)} kcal · P ${Math.round(pendingAnalysis.proteinas_g)} g. Si la persona confirma, llama registrar_comida_foto; si no, pregúntale.</analisis_pendiente>`
+      : '';
+    const volatile = `${contextoDia}${analisisNota}`;
     if (apiMessages.length) {
       const last = apiMessages[apiMessages.length - 1];
-      last.content = `${contextoDia}\n\n${last.content}`;
+      last.content = `${volatile}\n\n${last.content}`;
     } else {
-      apiMessages.push({ role: 'user', content: `${contextoDia}\n\n${message}` });
+      apiMessages.push({ role: 'user', content: `${volatile}\n\n${message}` });
     }
 
-    // NON-STREAMING (igual patrón que /api/analyze). El coach responde SIEMPRE vía la
-    // tool `responder` (tool_choice la fuerza) → estructura de tarjetas, 0 Markdown crudo.
+    // LOOP DE TOOL-USE (non-streaming, Haiku, max_tokens acotado). El coach ejecuta
+    // acciones (reusando lo existente) y CIERRA el turno con la tool `responder`.
+    // Topes duros (MAX_STEPS + TIME_BUDGET_MS) para no pasarnos del límite serverless.
     const anthropic = new Anthropic({ apiKey });
-    const resp = await anthropic.messages.create({
-      model: COACH_MODEL,
-      max_tokens: MAX_TOKENS,
-      system: `${system}${OUTPUT_RULES}`,
-      tools: [RESPONDER_TOOL],
-      tool_choice: { type: 'tool', name: 'responder' },
-      messages: apiMessages,
-    });
-    const blocks = resp?.content || [];
-    const toolBlock = blocks.find((b) => b.type === 'tool_use' && b.name === 'responder');
+    let tools = pendingAnalysis ? [REGISTRAR_FOTO_TOOL, RESPONDER_TOOL] : [RESPONDER_TOOL];
+    // Sin análisis pendiente: se fuerza responder (turno único, igual que antes). Con
+    // análisis: auto (puede registrar y luego responder).
+    let choice = pendingAnalysis ? { type: 'auto' } : { type: 'tool', name: 'responder' };
+    let convo = apiMessages;
+    let responderInput = null;
+    let guardado = null;
+    let lastResp = null;
 
-    let response = null;
-    if (toolBlock && toolBlock.input && typeof toolBlock.input === 'object') {
-      response = normalizeResponse(toolBlock.input);
-    } else {
-      // Fallback §4.2.4: el modelo emitió texto libre en vez de llamar `responder`.
-      // Envolverlo en una respuesta mínima válida (NUNCA pintar Markdown crudo).
-      const text = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
-      if (text) {
-        response = { titular: text.slice(0, 280), bloques: [], accion: { label: '', accion: 'ninguna', ref: '' } };
+    for (let step = 0; step < MAX_STEPS; step++) {
+      if (Date.now() - t0 > TIME_BUDGET_MS) break; // corte con gracia
+      lastResp = await anthropic.messages.create({
+        model: COACH_MODEL,
+        max_tokens: MAX_TOKENS,
+        system: `${system}${OUTPUT_RULES}`,
+        tools,
+        tool_choice: choice,
+        messages: convo,
+      });
+      const blocks = lastResp?.content || [];
+      const toolUses = blocks.filter((b) => b.type === 'tool_use');
+
+      // Acción de registro (solo una vez, y solo si hay análisis pendiente).
+      const action = !guardado && pendingAnalysis ? toolUses.find((b) => b.name === 'registrar_comida_foto') : null;
+      if (action) {
+        const exec = await registrarComidaFoto({ supabase, userId: user.id, input: action.input || {}, analysis: pendingAnalysis, ctx });
+        if (exec.guardado) guardado = exec.guardado;
+        // Solo se devuelve tool_result para ESTA tool_use (se descartan otras del turno
+        // para no dejar tool_use sin respuesta → evita 400 en la vuelta siguiente).
+        const assistantContent = blocks.filter((b) => b.type === 'text' || (b.type === 'tool_use' && b.id === action.id));
+        convo = [
+          ...convo,
+          { role: 'assistant', content: assistantContent },
+          { role: 'user', content: [{ type: 'tool_result', tool_use_id: action.id, content: JSON.stringify(exec.toolResult) }] },
+        ];
+        // Tras registrar: forzar cierre con responder (sin re-ofrecer la tool → sin doble alta).
+        tools = [RESPONDER_TOOL];
+        choice = { type: 'tool', name: 'responder' };
+        continue;
       }
+
+      const responderCall = toolUses.find((b) => b.name === 'responder');
+      if (responderCall && responderCall.input && typeof responderCall.input === 'object') {
+        responderInput = responderCall.input;
+        break;
+      }
+
+      // Sin tool_use útil: envolver texto libre como responder (nunca Markdown crudo).
+      const text = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
+      if (text) responderInput = { titular: text.slice(0, 280), bloques: [], accion: { label: '', accion: 'ninguna', ref: '' } };
+      break;
+    }
+
+    let response = responderInput ? normalizeResponse(responderInput) : null;
+    // Si registramos pero el modelo no cerró con responder (p.ej. corte por tiempo),
+    // sintetizamos una confirmación con números del backend (no del modelo).
+    if ((!response || !response.titular) && guardado) {
+      response = {
+        titular: `Registré ${guardado.titulo}: ${Math.round(guardado.kcal)} kcal.`,
+        bloques: [],
+        accion: { label: '', accion: 'ninguna', ref: '' },
+      };
     }
 
     if (!response || !response.titular) {
+      // Nada útil y NO hubo mutación → reembolso (no cobrar un turno sin valor).
       await safeRpc(supabase, 'reembolsar_ia', { p_request_id: requestId });
       requestId = null;
-      const diag = `⚠️ Sin respuesta. modelo=${COACH_MODEL} · stop=${resp?.stop_reason} · bloques=[${blocks.map((b) => b.type).join(', ') || 'ninguno'}]`;
+      const diag = `⚠️ Sin respuesta. modelo=${COACH_MODEL} · stop=${lastResp?.stop_reason} · pasos_agotados`;
       console.error('Coach vacío:', diag, 'ms=', Date.now() - t0);
       return NextResponse.json({ error: diag }, { status: 200 });
     }
+
+    const resp = lastResp;
 
     // Se persiste la respuesta estructurada como JSON en content; el renderer la parsea.
     const stored = JSON.stringify(response);
@@ -280,7 +375,7 @@ export async function POST(request) {
     await supabase.from('coach_conversations').update({ last_active_at: new Date().toISOString() }).eq('id', conv.id);
     requestId = null;
 
-    return NextResponse.json({ response });
+    return NextResponse.json({ response, registered: !!guardado });
   } catch (err) {
     // CUALQUIER excepción → JSON con el error EXACTO (a la burbuja) + logs de Vercel.
     console.error('Coach EXCEPCION:', err?.name, err?.status, err?.message, 'ms=', Date.now() - t0);

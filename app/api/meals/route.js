@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { validateMeal } from '@/lib/meals/insert';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const MEAL_TYPES = ['desayuno', 'comida', 'cena', 'snack'];
 
 export async function GET(request) {
   const supabase = await createClient();
@@ -73,44 +73,14 @@ export async function POST(request) {
     return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
   }
 
-  const date = String(body.date || '');
-  const time = String(body.time || '');
-  const title = String(body.title || '').trim().slice(0, 120);
-  if (!DATE_RE.test(date)) {
-    return NextResponse.json({ error: 'Fecha inválida' }, { status: 400 });
+  const v = validateMeal(body);
+  if (!v.ok) {
+    return NextResponse.json({ error: v.error }, { status: 400 });
   }
-  if (!/^\d{2}:\d{2}$/.test(time)) {
-    return NextResponse.json({ error: 'Hora inválida' }, { status: 400 });
-  }
-  if (!title) {
-    return NextResponse.json({ error: 'El título es obligatorio' }, { status: 400 });
-  }
-  const calories = Math.round(Number(body.calories));
-  if (!Number.isFinite(calories) || calories < 0 || calories > 10000) {
-    return NextResponse.json({ error: 'Calorías inválidas' }, { status: 400 });
-  }
-  const num = (v) => {
-    const n = Number(v);
-    return Number.isFinite(n) && n >= 0 ? Math.round(n * 10) / 10 : 0;
-  };
 
   const { data, error } = await supabase
     .from('meals')
-    .insert({
-      user_id: user.id,
-      date,
-      time,
-      title,
-      description: String(body.description || '').slice(0, 600),
-      meal_type: MEAL_TYPES.includes(body.meal_type) ? body.meal_type : 'comida',
-      calories,
-      protein_g: num(body.protein_g),
-      carbs_g: num(body.carbs_g),
-      fat_g: num(body.fat_g),
-      ingredients: Array.isArray(body.ingredients) ? body.ingredients.slice(0, 20) : [],
-      confidence: String(body.confidence || '').slice(0, 10),
-      image: String(body.image || '').replace(/[^a-zA-Z0-9.-]/g, ''),
-    })
+    .insert({ user_id: user.id, ...v.row })
     .select('id')
     .single();
 
