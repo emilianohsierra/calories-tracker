@@ -6,7 +6,7 @@ import UpgradeModal from '@/components/UpgradeModal';
 import PersonalityPicker from '@/components/coach/PersonalityPicker';
 
 // Marcador de versión visible: SÚBELO en cada deploy para confirmar qué bundle cargó.
-const BUILD = 'v8';
+const BUILD = 'v9';
 
 // Saludo contextual determinista (0 IA), anclado a los pendientes de hoy.
 function greetingText(ctx) {
@@ -71,10 +71,10 @@ export default function CoachPage() {
         setShowPlans(true);
         return;
       }
-      // NON-STREAMING (JSON): mostrar data.text, o el error/diagnóstico real; nunca en blanco.
+      // NON-STREAMING (JSON): el server SIEMPRE manda JSON. Mostrar error (incl. en 200) o text.
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setLastBubble(data.error ? (data.reason ? `${data.error} (${data.reason})` : data.error) : 'No pude responder ahora. Intenta de nuevo.');
+      if (data.error) {
+        setLastBubble(data.reason ? `${data.error} (${data.reason})` : data.error);
         return;
       }
       setLastBubble(data.text || 'El coach no devolvió respuesta. Intenta de nuevo.');

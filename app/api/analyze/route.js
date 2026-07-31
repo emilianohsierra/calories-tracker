@@ -89,7 +89,13 @@ export async function POST(request) {
     // billed===true (éxito o 200-malformado). Cualquier otro caso —incluidos los throws
     // pre-try como NO_API_KEY/BAD_PROVIDER donde billed queda undefined— reembolsa.
     if (err.billed !== true) {
-      await supabase.rpc('reembolsar_analisis', { p_request_id: requestId }).catch(() => {});
+      // supabase.rpc(...) es un thenable de PostgREST, no una Promise nativa: no usar
+      // .catch() directo (lanza TypeError). Envolver en try/catch.
+      try {
+        await supabase.rpc('reembolsar_analisis', { p_request_id: requestId });
+      } catch (e) {
+        console.error('reembolsar_analisis fallo:', e?.message);
+      }
     }
     // (A3) Mensajes genéricos al cliente: no exponer nombres de env vars, modelos ni
     // proveedor (es recon aunque no sean secretos). El detalle queda en console.error.
