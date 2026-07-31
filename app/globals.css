@@ -803,3 +803,21 @@ body {
 .segmented button[aria-pressed="true"] { border-color:var(--brand); background:var(--brand-tint); color:var(--brand-strong); }
 .reveal { text-align:center; }
 .reveal-kcal { font-size:44px; line-height:48px; font-weight:700; color:var(--text); }
+
+/* ===================== Coach IA · Fase 1 (chat) ===================== */
+.coach-shell { max-width: var(--maxw); margin:0 auto; height:100dvh; display:flex; flex-direction:column; background:var(--bg); }
+.coach-header { display:flex; align-items:center; justify-content:space-between; gap:var(--s3); padding:var(--s3) var(--s4); border-bottom:1px solid var(--border); background:var(--surface); }
+.coach-title { font-weight:600; color:var(--text); }
+.coach-thread { flex:1; overflow-y:auto; padding:var(--s4); display:flex; flex-direction:column; gap:var(--s3); }
+.chat-bubble { max-width:82%; padding:10px 13px; font-size:15px; line-height:21px; white-space:pre-wrap; word-break:break-word; }
+.chat-bubble.coach { align-self:flex-start; background:var(--surface-2); color:var(--text); border-radius:16px 16px 16px 4px; }
+.chat-bubble.user { align-self:flex-end; background:var(--brand); color:var(--brand-ink); border-radius:16px 16px 4px 16px; }
+.coach-composer { display:flex; gap:var(--s2); padding:var(--s3) var(--s4) calc(var(--s3) + env(safe-area-inset-bottom)); border-top:1px solid var(--border); background:var(--surface); }
+.coach-composer input { flex:1; min-height:var(--touch); padding:0 var(--s4); border:1px solid var(--border); border-radius:var(--r-pill); background:var(--surface-2); color:var(--text); font-size:15px; }
+.coach-composer .btn { min-width:var(--touch); border-radius:var(--r-pill); }
+.coach-entry { display:flex; align-items:center; justify-content:space-between; gap:var(--s3); width:100%; padding:var(--s4); margin-bottom:var(--s4); border:1px solid var(--border); border-radius:var(--r-lg); background:linear-gradient(135deg,var(--brand-tint),var(--surface)); color:var(--text); font-weight:600; cursor:pointer; }
+
+/* Coach · selector de personalidad (R2) */
+.tone-picker { display:flex; gap:var(--s2); padding:var(--s2) var(--s4); overflow-x:auto; border-bottom:1px solid var(--border); background:var(--surface); }
+.tone-chip { flex:0 0 auto; min-height:36px; padding:0 var(--s3); border:1px solid var(--border); border-radius:var(--r-pill); background:var(--surface-2); color:var(--text-2); font-size:13px; font-weight:600; cursor:pointer; }
+.tone-chip[aria-pressed="true"] { border-color:var(--brand); background:var(--brand-tint); color:var(--brand-strong); }

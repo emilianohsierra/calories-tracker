@@ -183,6 +183,10 @@ export default function Home() {
 
       {profile && targets ? (
         <>
+          <button type="button" className="coach-entry" onClick={() => router.push('/coach')}>
+            <span>💬 Habla con Mi Coach</span>
+            <span aria-hidden="true">›</span>
+          </button>
           <CoachTipCard coach={profile.coach} />
           <div style={{ textAlign: 'right', margin: '-8px 0 var(--s3)' }}>
             <button type="button" className="link-btn" onClick={() => router.push('/perfil')}>
