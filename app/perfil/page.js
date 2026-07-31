@@ -12,7 +12,7 @@ const COACHES = [
   { id: 'hipertrofia', label: 'Ganar músculo' },
   { id: 'runner', label: 'Correr / resistencia' },
   { id: 'bienestar', label: 'Comer más sano' },
-  { id: 'recomposicion', label: 'Recomposición' },
+  { id: 'recomposicion', label: 'Perder grasa y ganar músculo', note: 'Recomposición' },
 ];
 const ACTIVITY = [
   { key: 1.2, label: 'Sedentario' },
@@ -139,6 +139,7 @@ export default function PerfilPage() {
           {COACHES.map((c) => (
             <button key={c.id} type="button" className="goal-card" aria-pressed={f.coach === c.id} onClick={() => set('coach')(c.id)}>
               {c.label}
+              {c.note && <small>{c.note}</small>}
             </button>
           ))}
         </div>

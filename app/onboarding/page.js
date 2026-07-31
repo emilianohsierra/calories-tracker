@@ -9,7 +9,7 @@ const COACHES = [
   { id: 'hipertrofia', label: 'Ganar músculo', desc: 'Crecer con superávit limpio' },
   { id: 'runner', label: 'Correr / resistencia', desc: 'Rendir y recuperar mejor' },
   { id: 'bienestar', label: 'Comer más sano', desc: 'Hábitos y mantenimiento' },
-  { id: 'recomposicion', label: 'Recomposición', desc: 'Perder grasa y ganar músculo a la vez' },
+  { id: 'recomposicion', label: 'Perder grasa y ganar músculo', desc: 'Recomposición' },
 ];
 const ACTIVITY = [
   { key: 1.2, label: 'Sedentario', desc: 'Poco o nada de ejercicio' },
