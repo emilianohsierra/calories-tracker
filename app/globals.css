@@ -50,8 +50,8 @@ body {
   display: flex;
   align-items: center;
   gap: 14px;
-  background: linear-gradient(120deg, #e9f1fb, #f5f9fd);
-  border: 1px solid rgba(42, 120, 214, 0.16);
+  background: linear-gradient(120deg, var(--brand-tint), var(--surface));
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 18px 20px;
   margin-bottom: 16px;
@@ -65,7 +65,7 @@ body {
   width: 150px;
   height: 150px;
   border-radius: 50%;
-  background: rgba(42, 120, 214, 0.05);
+  background: var(--brand-tint);
 }
 
 .banner-icon {
@@ -76,8 +76,9 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 28px;
+  color: var(--brand);
   background: var(--surface);
-  border: 1px solid rgba(42, 120, 214, 0.18);
+  border: 1px solid var(--border);
   border-radius: 14px;
 }
 
@@ -438,7 +439,7 @@ body {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(11, 11, 11, 0.45);
+  background: var(--overlay);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -980,3 +981,111 @@ html, body { transition: background-color var(--dur-base) var(--ease-standard), 
   .coach-shell { max-width: 640px; }
   .chat-bubble { max-width: 70%; }
 }
+
+/* ===================== Paywall premium · UpgradeModal (Casey) ===================== */
+/* Reutiliza .modal/.modal-overlay/.btn/.plan-table/.error-banner. Todo tokenizado
+   (Rams) → dark mode automático via [data-theme]. Vender tranquilidad, cero dark patterns. */
+.pw-modal { max-width: 480px; padding: 18px 18px 22px; }
+
+.pw-head { display:flex; align-items:center; justify-content:space-between; margin-bottom: var(--s3); }
+.pw-eyebrow {
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+  color: var(--brand-strong);
+}
+.pw-close {
+  display:inline-flex; align-items:center; justify-content:center;
+  width: var(--touch); height: var(--touch); margin:-8px -8px -8px 0;
+  border:none; background:none; color: var(--text-3); cursor:pointer;
+  border-radius: var(--r-md); transition: background var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard);
+}
+.pw-close:hover { background: var(--surface-2); color: var(--text); }
+
+.pw-title { font-size:22px; line-height:1.2; font-weight:700; letter-spacing:-0.3px; color: var(--text); margin:0 0 6px; }
+.pw-title-sm { font-size:19px; }
+.pw-sub { font-size:14px; line-height:1.45; color: var(--text-2); margin:0 0 var(--s4); }
+.pw-limit-body { font-size:15px; line-height:1.5; color: var(--text-2); margin:0 0 var(--s4); }
+
+/* Beneficios (acompañamiento primero) */
+.pw-benefits { list-style:none; margin:0 0 var(--s4); padding:0; display:flex; flex-direction:column; gap:var(--s3); }
+.pw-benefit { display:grid; grid-template-columns:auto 1fr; gap:var(--s3); align-items:start; }
+.pw-benefit-ico {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:34px; height:34px; flex-shrink:0;
+  color: var(--brand-strong); background: var(--brand-tint);
+  border-radius: var(--r-md);
+}
+.pw-benefit-t { display:block; font-size:15px; font-weight:600; color: var(--text); line-height:1.3; }
+.pw-benefit-d { display:block; font-size:13px; color: var(--text-2); line-height:1.4; margin-top:2px; }
+
+/* Próximamente en Pro — atenuado, sin fecha, sin promesas médicas */
+.pw-soon {
+  background: var(--surface-2); border:1px solid var(--border);
+  border-radius: var(--r-md); padding: var(--s3) var(--s4); margin: 0 0 var(--s4);
+}
+.pw-soon-head { font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color: var(--text-3); margin:0 0 var(--s2); }
+.pw-soon-item { display:grid; grid-template-columns:auto 1fr; gap:var(--s3); align-items:start; }
+.pw-soon-item + .pw-soon-item { margin-top: var(--s2); }
+/* A5: atenuar con color canónico (contraste AA garantizado en dark), no con opacity */
+.pw-soon-item .pw-benefit-t { color: var(--text-3); font-weight:600; }
+.pw-soon-item .pw-benefit-d { color: var(--text-3); }
+.pw-badge {
+  align-self:start; font-size:11px; font-weight:700; letter-spacing:.03em;
+  color: var(--text-3); background: var(--surface); border:1px solid var(--border);
+  border-radius: var(--r-pill); padding:2px 8px; white-space:nowrap;
+}
+
+/* Comparativa — A1: se va del look "hoja de cálculo" a nivel Apple Health/Linear:
+   sin cuadrícula, solo separador por fila, más aire, columna Pro con tint sutil. */
+.pw-table { margin-top: 2px; border-collapse: collapse; }
+.pw-table th, .pw-table td { border: none; border-bottom: 1px solid var(--border); padding: 10px 12px; }
+.pw-table tbody tr:last-child td { border-bottom: none; }
+.pw-table thead th { background: var(--surface-2); }                 /* A2: resalta en dark, no se hunde */
+.pw-table td:nth-child(3), .pw-table th:nth-child(3) { background: var(--brand-tint); }  /* columna Pro destacada sin bordes */
+.pw-table thead th:nth-child(3) { border-top-right-radius: var(--r-sm); }
+.pw-table tbody tr:last-child td:nth-child(3) { border-bottom-right-radius: var(--r-sm); }
+.pw-table-cap { text-align:left; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color: var(--text-3); padding-bottom:6px; }
+.pw-pro-cell { font-weight:700; color: var(--brand-strong); }
+.pw-fineprint { color: var(--text-3); }                              /* A3: token canónico */
+
+/* Precio */
+.pw-price { display:flex; align-items:baseline; gap:6px; margin: var(--s4) 0 var(--s2); }
+.pw-price-amt { font-size:30px; font-weight:800; letter-spacing:-0.5px; color: var(--text); line-height:1; }
+.pw-price-per { font-size:14px; font-weight:500; color: var(--text-2); }
+
+/* CTA + reaseguro */
+.pw-cta { width:100%; min-height: var(--touch); display:inline-flex; align-items:center; justify-content:center; gap: var(--s2); font-size:15px; }
+.pw-spin { width:16px; height:16px; border:2px solid currentColor; border-right-color:transparent; opacity:.9; }
+.pw-reassure { text-align:center; font-size:13px; color: var(--text-3); margin: 2px 0 2px; }
+.pw-tertiary { text-decoration:none; color: var(--text-3); font-size:13px; }
+.pw-tertiary:hover { text-decoration:underline; }
+.pw-cancel-note { margin-bottom: var(--s3); }
+
+/* Botones de acción a ancho completo, con área táctil */
+.plan-actions .btn { width:100%; min-height: var(--touch); display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+.plan-actions .link-btn { align-self:center; min-height: var(--touch); display:inline-flex; align-items:center; } /* A9: área táctil 44 */
+
+/* Bullet destacado por `feature` (la función que trajo al usuario al paywall) */
+.pw-benefit--focus {
+  background: var(--brand-tint);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--s3);
+  margin: calc(var(--s1) * -1) 0;
+}
+.pw-benefit--focus .pw-benefit-ico { background: var(--surface); }
+
+/* A6: el spinner del checkout respeta prefers-reduced-motion (antes solo .ring-anim) */
+@media (prefers-reduced-motion: reduce) { .spinner, .pw-spin { animation: none; } }
+
+/* A10: dock de conversión anclado al fondo del sheet (solo variante plans).
+   El valor scrollea arriba; precio + CTA + reaseguro + "Ahora no" siempre alcanzables. */
+.pw-dock {
+  position: sticky; bottom: 0;
+  margin: var(--s2) -18px -22px;
+  padding: var(--s3) 18px calc(var(--s4) + env(safe-area-inset-bottom));
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -10px 18px -12px rgba(12,13,15,0.18);
+}
+.pw-dock .pw-price { margin-top: 0; }

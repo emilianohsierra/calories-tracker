@@ -7,14 +7,14 @@ import WeekChart from '@/components/WeekChart';
 import MealList from '@/components/MealList';
 import AddMealModal from '@/components/AddMealModal';
 import UpgradeModal from '@/components/UpgradeModal';
-import CoachTipCard from '@/components/CoachTipCard';
-import DayProgress from '@/components/DayProgress';
+import BriefingCard from '@/components/home/BriefingCard';
 import GreetingHeader from '@/components/GreetingHeader';
 import Icon from '@/components/ui/Icon';
 import { addDays, dateLabel, localDateStr } from '@/lib/format';
 import { downscaleImage } from '@/lib/image';
 import { createClient } from '@/lib/supabase/client';
 import { currentPeriod } from '@/lib/usage';
+import { fetchHomeBriefing, buildFallbackBriefing } from '@/lib/coach/homeBriefing';
 
 const EMPTY_TOTALS = { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
 
@@ -32,6 +32,8 @@ export default function Home() {
   const [toast, setToast] = useState('');
   const [profile, setProfile] = useState(null); // nutrition_profile (Ola 1)
   const [targets, setTargets] = useState(null); // plan calculado
+  const [briefing, setBriefing] = useState(null); // getHomeBriefing() del coach (o null → fallback)
+  const [dayLoaded, setDayLoaded] = useState(false); // día cargado → deja de mostrar skeleton
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
 
@@ -65,11 +67,15 @@ export default function Home() {
   };
 
   const loadDay = useCallback(async (d) => {
-    const res = await fetch(`/api/meals?date=${d}`);
-    if (!res.ok) return;
-    const data = await res.json();
-    setMeals(data.meals);
-    setTotals(data.totals);
+    try {
+      const res = await fetch(`/api/meals?date=${d}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setMeals(data.meals);
+      setTotals(data.totals);
+    } finally {
+      setDayLoaded(true);
+    }
   }, []);
 
   const loadWeek = useCallback(async (d) => {
@@ -103,9 +109,23 @@ export default function Home() {
   }, [loadUsage]);
 
   useEffect(() => {
+    setDayLoaded(false);
     loadDay(date);
     loadWeek(date);
   }, [date, loadDay, loadWeek]);
+
+  // Briefing del coach (Karpathy). Si el endpoint no existe aún, queda null y la HOME
+  // usa el fallback determinista con targets + totals. No bloquea el render.
+  useEffect(() => {
+    if (!targets) return;
+    let alive = true;
+    fetchHomeBriefing().then((b) => {
+      if (alive) setBriefing(b);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [targets, date]);
 
   const onGoalSave = async (value) => {
     setGoal(value);
@@ -150,7 +170,7 @@ export default function Home() {
   return (
     <main className="container">
       <GreetingHeader
-        subtitle="Tu resumen de hoy"
+        subtitle={profile && targets ? 'Tu coach ya analizó tu día' : 'Tu resumen de hoy'}
         actions={
           <>
             {usage && (
@@ -196,7 +216,6 @@ export default function Home() {
             </span>
             <span aria-hidden="true">›</span>
           </button>
-          <CoachTipCard coach={profile.coach} />
           <div style={{ textAlign: 'right', margin: '-8px 0 var(--s3)' }}>
             <button type="button" className="link-btn" onClick={() => router.push('/perfil')}>
               Editar mi plan
@@ -231,7 +250,13 @@ export default function Home() {
       </nav>
 
       {profile && targets ? (
-        <DayProgress totals={totals} targets={targets} />
+        <BriefingCard
+          totals={totals}
+          targets={targets}
+          briefing={briefing || buildFallbackBriefing({ targets, totals })}
+          loading={!dayLoaded}
+          onAsk={() => router.push('/coach')}
+        />
       ) : (
         <DailySummary totals={totals} goal={goal} onGoalSave={onGoalSave} />
       )}

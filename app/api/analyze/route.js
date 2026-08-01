@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import crypto from 'node:crypto';
 import { analyzeFoodImage } from '@/lib/analyze';
 import { createClient } from '@/lib/supabase/server';
-import { limitMessage } from '@/lib/usage';
+import { limitMessage, nextResetLabel } from '@/lib/usage';
+import { limitPayload, plansPayload } from '@/lib/paywall';
 
 const MAX_BYTES = 8 * 1024 * 1024;
 const EXT_BY_MIME = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
@@ -53,6 +54,19 @@ export async function POST(request) {
     return NextResponse.json({ error: 'La imagen debe pesar entre 1 byte y 8 MB' }, { status: 400 });
   }
 
+  // T7 (Drucker paywall-triggers §4): el reanálisis CON CORRECCIÓN es Pro-only → 403 plans
+  //    si no es Pro, ANTES de reservar crédito y de llamar a la IA. (El cliente ya oculta la
+  //    caja de corrección a Free; esto es la fuente de verdad server-side.)
+  if (feedback && previous) {
+    const { data: prof } = await supabase.from('profiles').select('plan').eq('id', user.id).single();
+    if (prof?.plan !== 'premium') {
+      return NextResponse.json(
+        { error: 'La corrección con IA es parte de Pro.', ...plansPayload({ feature: 'reanalisis' }) },
+        { status: 403 }
+      );
+    }
+  }
+
   // 3) Reserva atómica de 1 crédito de IA. Cubre TODA llamada a Claude, incluida la
   //    ruta de corrección (feedback/previous), porque es incondicional aquí (H2).
   const requestId = crypto.randomUUID();
@@ -67,8 +81,17 @@ export async function POST(request) {
     );
   }
   if (!consumed.allowed) {
+    // T1 (Drucker §4): agotó los análisis del mes → 429 variant limit. Chequeo ANTES de la
+    // IA (ya es el patrón vivo). Mantengo error/reason/remaining para consumidores previos.
+    const cap = Number(process.env.FREE_ANALYSIS_LIMIT) || 10;
+    const remaining = consumed.remaining ?? 0;
     return NextResponse.json(
-      { error: limitMessage(consumed.reason), reason: consumed.reason, remaining: consumed.remaining ?? 0 },
+      {
+        error: limitMessage(consumed.reason),
+        reason: consumed.reason,
+        remaining,
+        ...limitPayload({ feature: 'analisis', usage: { plan: 'free', used: Math.max(0, cap - remaining), cap, remaining, resetLabel: nextResetLabel() } }),
+      },
       { status: 429 }
     );
   }

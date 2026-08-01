@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import Icon from '@/components/ui/Icon';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -40,7 +41,7 @@ export default function LoginPage() {
   return (
     <main className="container">
       <header className="banner">
-        <div className="banner-icon" aria-hidden="true">🍽️</div>
+        <div className="banner-icon" aria-hidden="true"><Icon name="utensils" size={26} /></div>
         <div>
           <h1 className="banner-title">Registro Calórico</h1>
           <p className="banner-sub">{mode === 'login' ? 'Inicia sesión' : 'Crea tu cuenta'}</p>

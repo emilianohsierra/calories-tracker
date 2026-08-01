@@ -54,6 +54,9 @@ Van en `app/globals.css` como custom properties bajo `:root` y `[data-theme="dar
   --ring-focus: 0 0 0 3px rgba(14,124,107,0.30);
 }
 
+/* ⚠️ SUPERSEDED — la paleta dark CANÓNICA es la de `plan/coach-ui-rediseno.md` §8
+   (hex de Emiliano) y ya vive en app/globals.css: --bg #0B0D10 / --surface #14171C /
+   --surface-2 #1A1E24 / --text #E6E8EB / border rgba(255,255,255,.08). Usar esa. */
 [data-theme="dark"] {
   --bg:            #0C0D0F;
   --surface:       #16181C;

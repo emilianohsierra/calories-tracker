@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { currentTimeStr } from '@/lib/format';
 import UpgradeModal from '@/components/UpgradeModal';
 import Icon from '@/components/ui/Icon';
+import { readPaywall } from '@/lib/paywall';
 
 const MEAL_TYPES = ['desayuno', 'comida', 'cena', 'snack'];
 
@@ -29,7 +30,7 @@ export default function AddMealModal({ photo, date, usage, resetLabel, onClose, 
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(null);
   const [rawAnalysis, setRawAnalysis] = useState(null);
-  const [blocked, setBlocked] = useState(false); // paywall: sin análisis IA disponibles
+  const [paywall, setPaywall] = useState(null); // paywall del backend (o gate cliente): { variant, feature, usage }
 
   // El límite aplica SOLO a la IA. Pro = ilimitado; Free necesita saldo > 0.
   // (M2) Si la cuota no cargó (usage null), NO bloquear: se permite el intento y el
@@ -39,12 +40,12 @@ export default function AddMealModal({ photo, date, usage, resetLabel, onClose, 
 
   const onAnalyzeClick = () => {
     if (canAnalyze) runAnalysis();
-    else setBlocked(true); // gate ANTES de llamar a la IA (no gasta la llamada)
+    else setPaywall({ variant: 'limit', feature: 'analisis', usage }); // gate ANTES de llamar a la IA
   };
 
   // Modo manual (gratis e ilimitado): formulario vacío, sin llamar a la IA.
   const enterManual = () => {
-    setBlocked(false);
+    setPaywall(null);
     setRawAnalysis(null);
     setForm({ ...EMPTY_FORM, time: currentTimeStr() });
     setPhase('edit');
@@ -65,6 +66,13 @@ export default function AddMealModal({ photo, date, usage, resetLabel, onClose, 
       }
       const res = await fetch('/api/analyze', { method: 'POST', body: fd });
       const data = await res.json();
+      // Paywall (backend = fuente de verdad): 429 (T1 análisis) / 403 (T7 reanálisis) con blocked.
+      const pw = readPaywall(res.status, data);
+      if (pw) {
+        setPaywall(pw);
+        setPhase(fallbackPhase);
+        return;
+      }
       if (!res.ok) throw new Error(data.error || 'No se pudo analizar la imagen');
       setRawAnalysis(data);
       setForm((prev) => ({
@@ -267,13 +275,14 @@ export default function AddMealModal({ photo, date, usage, resetLabel, onClose, 
         )}
       </div>
 
-      {blocked && (
+      {paywall && (
         <UpgradeModal
-          variant="limit"
-          usage={usage}
-          resetLabel={resetLabel}
+          variant={paywall.variant}
+          feature={paywall.feature}
+          usage={paywall.usage || usage}
+          resetLabel={paywall.usage?.resetLabel ?? resetLabel}
           onManual={enterManual}
-          onClose={() => setBlocked(false)}
+          onClose={() => setPaywall(null)}
         />
       )}
     </div>

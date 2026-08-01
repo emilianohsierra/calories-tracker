@@ -14,9 +14,10 @@ import QuickActions from '@/components/coach/QuickActions';
 import Composer from '@/components/coach/Composer';
 import { downscaleImage } from '@/lib/image';
 import { localDateStr } from '@/lib/format';
+import { readPaywall } from '@/lib/paywall';
 
 // Marcador de versión: oculto por defecto; visible solo con ?debug en la URL.
-const BUILD = 'v17';
+const BUILD = 'v18';
 
 // Saludo contextual determinista (0 IA), anclado a los pendientes de hoy. Sin emojis (Rams §2).
 function greetingText(ctx) {
@@ -32,7 +33,7 @@ export default function CoachPage() {
   const [messages, setMessages] = useState([]); // {role, content, error?, diag?}
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
-  const [showPlans, setShowPlans] = useState(false);
+  const [paywall, setPaywall] = useState(null); // { variant, feature, usage } del backend
   const [ctx, setCtx] = useState(null);
   const [tone, setTone] = useState('amigable');
   const [debug, setDebug] = useState(false);
@@ -88,12 +89,14 @@ export default function CoachPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, ...(analysis ? { pendingAnalysis: analysis } : {}) }),
       });
-      if (res.status === 402) {
+      const data = await res.json().catch(() => ({}));
+      // Paywall (backend = fuente de verdad): 429/403 con blocked → abre UpgradeModal.
+      const pw = readPaywall(res.status, data);
+      if (pw) {
         setMessages((m) => m.slice(0, -1)); // quita la burbuja vacía del coach
-        setShowPlans(true);
+        setPaywall(pw);
         return;
       }
-      const data = await res.json().catch(() => ({}));
       if (data.error) {
         console.error('Coach error:', data.error, data.reason || '');
         setLastBubble({ error: true, diag: data.reason ? `${data.error} (${data.reason})` : data.error });
@@ -103,6 +106,10 @@ export default function CoachPage() {
         setLastBubble({ content: JSON.stringify(data.response), planChange: data.planChange || null });
       } else {
         setLastBubble({ error: true, diag: 'respuesta vacía' });
+      }
+      // coachRemaining (null=ilimitado/Pro) → estado para badge/aviso 80% (paywall-triggers §3).
+      if (data.coachRemaining !== undefined) {
+        setUsage((u) => ({ ...(u || {}), coach: { remaining: data.coachRemaining } }));
       }
       if (data.registered) {
         setPendingAnalysis(null);
@@ -218,9 +225,10 @@ export default function CoachPage() {
       fd.append('image', blob, 'platillo.jpg');
       const res = await fetch('/api/analyze', { method: 'POST', body: fd });
       const data = await res.json().catch(() => ({}));
-      if (res.status === 429 || res.status === 402) {
+      const pw = readPaywall(res.status, data);
+      if (pw) {
         setMessages((m) => m.slice(0, -2)); // quita "Analiza esta foto." + burbuja vacía
-        setShowPlans(true);
+        setPaywall(pw);
         return;
       }
       if (!res.ok || data.error || data.es_comida === false) {
@@ -334,7 +342,16 @@ export default function CoachPage() {
 
       <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={onPickFile} />
 
-      {showPlans && <UpgradeModal variant="plans" usage={usage || { plan: 'free' }} onClose={() => setShowPlans(false)} />}
+      {paywall && (
+        <UpgradeModal
+          variant={paywall.variant}
+          feature={paywall.feature}
+          usage={paywall.usage || usage || { plan: 'free' }}
+          resetLabel={paywall.usage?.resetLabel}
+          onManual={() => setPaywall(null)}
+          onClose={() => setPaywall(null)}
+        />
+      )}
     </main>
   );
 }

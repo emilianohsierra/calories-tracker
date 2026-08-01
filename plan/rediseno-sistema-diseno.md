@@ -1,12 +1,33 @@
 # Sistema de Diseño — Compañero de Salud con IA (móvil-first, PWA)
 
 **Rol:** UX/UI Lead · dueño del sistema de diseño · **Autor:** Rams Design (skm3lj3d)
-**Fecha:** 2026-07-28 · **Estado:** Sistema de diseño + inventario de pantallas (no UI final de código)
+**Creado:** 2026-07-28 · **Actualizado:** 2026-07-31 · **Estado:** Sistema canónico — **parcialmente implementado y vivo** (ver §0.bis)
 **Construye sobre:** `plan/premium-vision-ux.md` (mi visión previa)
 **Realiza la visión de:** Jony Ive (estrella polar creativa — "coach sereno tipo Oura, no MyFitnessPal")
 **Alineado con datos de:** Karpathy (`plan/premium-vision-nutricion-ia.md`) · Producto de: Drucker (`plan/premium-vision-producto.md`)
 
 > **Etiquetas de datos por widget:** `[REAL]` ya existe · `[INPUT]` lo captura el usuario · `[IA]` lo genera visión/coach · `[V2/V3]` ola posterior · `[?]` pendiente confirmar. Cada pantalla mapea a fuentes reales del motor de Karpathy y al corte Free/Pro de Drucker.
+
+---
+
+## 0.bis Estado de implementación (2026-07-31)
+
+Este documento sigue siendo el **sistema canónico**. Desde su creación se derivaron specs de detalle y **se construyó parte del sistema en código**. Fuente de verdad viva = `app/globals.css` (tokens) + `components/ui/Icon.js`. Mapa de los 6 entregables:
+
+| Entregable | Estado | Dónde |
+|---|---|---|
+| (1) Navegación (tab bar + orbe Coach) | Spec cerrado; orbe/coach vivos | `plan/ola1-spec-diseno.md §2`, `app/coach/*` |
+| (2) Inventario de pantallas | Spec completo (§3 aquí); **HOME, onboarding, perfil, registro, coach construidos** | `app/page.js`, `app/onboarding/*`, `app/perfil/*`, `app/coach/*` |
+| (3) Librería de componentes | §4 aquí; primitivos vivos: `Icon`, `ProgressRing`, `DayProgress`, `GreetingHeader`, `ThemeToggle`, cards del coach | `components/**` |
+| (4) Tokens | **VIVOS y canónicos** en `globals.css` (color light/dark, tipografía, espaciado, radios, iconografía) | `app/globals.css` bloque "Ola 1" + `[data-theme=dark]` |
+| (5) Microinteracciones | Spec §5 aquí + `coach-ui-rediseno.md §11`; typing/anillos/respiración implementados en coach | `app/globals.css`, `app/coach/*` |
+| (6) A11y + Dark mode | **Dark mode shipeado** (paleta de Emiliano), `:focus-visible` global, `--overlay`/tracks tokenizados, auditoría app-wide con Casey | `globals.css`, `plan/consistencia-premium-app.md` |
+
+**Specs de detalle derivados de este sistema:** `ola1-spec-diseno.md` (tokens concretos + HOME + onboarding), `ola1-perfil-edicion-spec.md`, `coach-ui-spec.md` / `coach-fase1-ui.md` / `coach-ui-rediseno.md` (coach), `consistencia-premium-app.md` (auditoría dark/consistencia, Casey).
+
+**Reconciliaciones canónicas ya aplicadas** (si algo abajo difiere, mandan estas): marca **verde-teal `#0E7C6B`** (dark `#2BC4AC`), **dark = hexes de Emiliano** (`--bg #0B0D10 / --surface #14171C / --surface-2 #1A1E24 / --text #E6E8EB`), `--surface` claro `#FFFFFF`, `--warn` (alias de `--warn-c`), `.c-title` 17/24, `.btn-primary` usa `--brand-ink`, tokens `--*-track` de nutriente y `--overlay` provistos. **Pendiente de sistema:** cargar **Inter** vía `next/font` (hoy corre `system-ui`).
+
+> El resto del documento (§0–§8) es la **visión de sistema completa** y permanece vigente como referencia de diseño; las secciones de tokens (§2) deben leerse junto con los valores vivos de `globals.css` citados arriba.
 
 ---
 

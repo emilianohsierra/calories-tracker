@@ -3,7 +3,9 @@ import crypto from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { assembleContext } from '@/lib/coach/context';
-import { registrarComidaFoto, registrarTexto, actualizarContextoDia, generarCena, cambiarObjetivo } from '@/lib/coach/actions';
+import { registrarComidaFoto, registrarTexto, actualizarContextoDia, generarCena, cambiarObjetivo, guardarMemoria } from '@/lib/coach/actions';
+import { limitPayload } from '@/lib/paywall';
+import { nextResetLabel } from '@/lib/usage';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -66,6 +68,24 @@ const CAMBIAR_PLAN_TOOL = {
     properties: {
       objetivo: { type: 'string', enum: ['perdida_grasa', 'hipertrofia', 'runner', 'recomposicion', 'bienestar'] },
       nota: { type: 'string', description: 'Lo que pidió en sus palabras (p.ej. "ganar músculo"). "" si no aplica.' },
+    },
+  },
+};
+
+// Tool `save_memory` (Karpathy §4.7): guarda un hecho permanente de la persona. NO para
+// alergias/intolerancias (esas van a restricciones con confirmación — guard en el ejecutor).
+const SAVE_MEMORY_TOOL = {
+  name: 'save_memory',
+  description:
+    'Guarda un dato permanente de la persona para recordarlo en el futuro (favorito, rechazo, lesión, compromiso, preferencia, hecho clave). NO lo uses para alergias/intolerancias: esas se confirman y van a las restricciones duras del perfil.',
+  input_schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['tipo', 'contenido', 'caducidad_dias'],
+    properties: {
+      tipo: { type: 'string', enum: ['favorito', 'rechazo', 'lesion', 'compromiso', 'preferencia', 'hecho_clave'] },
+      contenido: { type: 'string' },
+      caducidad_dias: { type: 'integer', description: '0 = permanente; >0 = caduca en N días (p.ej. lesión temporal).' },
     },
   },
 };
@@ -316,8 +336,18 @@ export async function POST(request) {
     }
     if (!gate.allowed) {
       requestId = null;
+      // T2 (Drucker paywall-triggers §4): agotó la degustación del coach → 429 variant limit.
+      // El chequeo va ANTES de llamar al modelo (no gastar la llamada). Backend = fuente de
+      // verdad; el copy lo pone el UpgradeModal. Otros motivos (kill_switch/cap global) = 503.
       if (gate.reason === 'free_limit') {
-        return NextResponse.json({ error: 'Llegaste a tus preguntas gratis del coach este mes.', reason: 'free_limit' }, { status: 402 });
+        const cap = Number(process.env.FREE_COACH_LIMIT) || 3; // solo display; enforcement real = app_config
+        return NextResponse.json(
+          {
+            error: 'Llegaste a tus preguntas gratis del coach este mes.',
+            ...limitPayload({ feature: 'coach_chat', usage: { plan: 'free', used: cap, cap, remaining: 0, resetLabel: nextResetLabel() } }),
+          },
+          { status: 429 }
+        );
       }
       return NextResponse.json({ error: 'El coach no está disponible por el momento.', reason: gate.reason }, { status: 503 });
     }
@@ -362,7 +392,7 @@ export async function POST(request) {
     const anthropic = new Anthropic({ apiKey });
     // registrar_texto disponible en todo turno; registrar_comida_foto solo con foto
     // pendiente. tool_choice auto (el modelo decide). El chat charla = 1 vuelta (responder).
-    const baseTools = [REGISTRAR_TEXTO_TOOL, ACTUALIZAR_TOOL, GENERAR_CENA_TOOL, CAMBIAR_PLAN_TOOL, RESPONDER_TOOL];
+    const baseTools = [REGISTRAR_TEXTO_TOOL, ACTUALIZAR_TOOL, GENERAR_CENA_TOOL, CAMBIAR_PLAN_TOOL, SAVE_MEMORY_TOOL, RESPONDER_TOOL];
     let tools = pendingAnalysis ? [REGISTRAR_FOTO_TOOL, ...baseTools] : baseTools;
     let choice = { type: 'auto' };
     let convo = apiMessages;
@@ -372,6 +402,7 @@ export async function POST(request) {
     let actualizado = null; // estado del día actualizado
     let opciones = null; // opciones de generar_cena (propuestas, sin escribir)
     let planChange = null; // propuesta de cambio de objetivo (sin escribir)
+    let memoria = null; // hecho guardado en memoria
     let lastResp = null;
 
     for (let step = 0; step < MAX_STEPS; step++) {
@@ -388,13 +419,14 @@ export async function POST(request) {
       const toolUses = blocks.filter((b) => b.type === 'tool_use');
 
       // Una sola acción por turno (foto tiene prioridad si hay análisis pendiente).
-      const canAct = !guardado && !estimate && !actualizado && !opciones && !planChange;
+      const canAct = !guardado && !estimate && !actualizado && !opciones && !planChange && !memoria;
       const fotoAction = canAct && pendingAnalysis ? toolUses.find((b) => b.name === 'registrar_comida_foto') : null;
       const textoAction = canAct && !fotoAction ? toolUses.find((b) => b.name === 'registrar_texto') : null;
       const cenaAction = canAct && !fotoAction && !textoAction ? toolUses.find((b) => b.name === 'generar_cena') : null;
       const planAction = canAct && !fotoAction && !textoAction && !cenaAction ? toolUses.find((b) => b.name === 'cambiar_plan') : null;
       const ctxAction = canAct && !fotoAction && !textoAction && !cenaAction && !planAction ? toolUses.find((b) => b.name === 'actualizar_contexto_dia') : null;
-      const action = fotoAction || textoAction || cenaAction || planAction || ctxAction;
+      const memAction = canAct && !fotoAction && !textoAction && !cenaAction && !planAction && !ctxAction ? toolUses.find((b) => b.name === 'save_memory') : null;
+      const action = fotoAction || textoAction || cenaAction || planAction || ctxAction || memAction;
       if (action) {
         let exec;
         if (fotoAction) {
@@ -409,9 +441,12 @@ export async function POST(request) {
         } else if (planAction) {
           exec = cambiarObjetivo({ ctx, input: action.input || {} });
           if (exec.planChange) planChange = exec.planChange;
-        } else {
+        } else if (ctxAction) {
           exec = await actualizarContextoDia({ supabase, userId: user.id, input: action.input || {} });
           if (exec.estado) actualizado = exec.estado;
+        } else {
+          exec = await guardarMemoria({ supabase, userId: user.id, input: action.input || {} });
+          if (exec.memoria) memoria = exec.memoria;
         }
         // Solo se devuelve tool_result para ESTA tool_use (se descartan otras del turno
         // para no dejar tool_use sin respuesta → evita 400 en la vuelta siguiente).
@@ -497,6 +532,10 @@ export async function POST(request) {
     if ((!response || !response.titular) && actualizado) {
       response = { titular: 'Anotado.', bloques: [], accion: { label: '', accion: 'ninguna', ref: '' } };
     }
+    // Memoria guardada sin cierre de responder → confirmación mínima.
+    if ((!response || !response.titular) && memoria) {
+      response = { titular: `Lo recordaré: ${memoria.contenido}.`, bloques: [], accion: { label: '', accion: 'ninguna', ref: '' } };
+    }
 
     if (!response || !response.titular) {
       // Nada útil y NO hubo mutación → reembolso (no cobrar un turno sin valor).
@@ -523,7 +562,9 @@ export async function POST(request) {
     await supabase.from('coach_conversations').update({ last_active_at: new Date().toISOString() }).eq('id', conv.id);
     requestId = null;
 
-    return NextResponse.json({ response, registered: !!guardado, planChange: planChange || null });
+    // coachRemaining (null = ilimitado/Pro; número = degustación Free restante) para que la
+    // UI pinte el badge / aviso 80% (paywall-triggers §3). Lectura de consumir_ia, no lo toca.
+    return NextResponse.json({ response, registered: !!guardado, planChange: planChange || null, coachRemaining: gate?.remaining ?? null });
   } catch (err) {
     // CUALQUIER excepción → JSON con el error EXACTO (a la burbuja) + logs de Vercel.
     console.error('Coach EXCEPCION:', err?.name, err?.status, err?.message, 'ms=', Date.now() - t0);
