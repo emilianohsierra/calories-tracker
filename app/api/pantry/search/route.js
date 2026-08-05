@@ -62,11 +62,14 @@ export async function GET(request) {
       .eq('code', code)
       .maybeSingle();
     if (data?.products) {
-      return NextResponse.json({ product: toCatalogResult(data.products), source: 'catalogo' });
+      return NextResponse.json({ found: true, product: toCatalogResult(data.products), source: 'catalogo' });
     }
     // OFF fallback (no dependencia dura): consulta, cachea al catálogo, atribuye.
     const off = await fetchOFF(code);
-    if (!off) return NextResponse.json({ product: null, source: null });
+    if (!off) {
+      // MISS (cobertura OFF floja en MX): NO callejón sin salida. El front ofrece alternativas.
+      return NextResponse.json({ found: false, product: null, source: null, sugerencias: ['texto', 'etiqueta'] });
+    }
     // Cache del 'verificado' SOLO con service_role (server-only), tras el fetch REAL a OFF —
     // nunca escribible por el usuario (Slowking). Si falta el admin, se devuelve sin cachear.
     let productId = null;
@@ -86,7 +89,7 @@ export async function GET(request) {
       confianza: 'verified',
       imagen: off.image_url || '',
     };
-    return NextResponse.json({ product, source: 'open_food_facts', atribucion: 'Datos de Open Food Facts' });
+    return NextResponse.json({ found: true, product, source: 'open_food_facts', atribucion: 'Datos de Open Food Facts' });
   }
 
   // Búsqueda por nombre/marca (pg_trgm sobre `norm`).

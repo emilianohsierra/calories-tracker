@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import ConfirmProduct from '@/components/pantry/ConfirmProduct';
+import ScanView from '@/components/pantry/ScanView';
+import LabelCapture from '@/components/pantry/LabelCapture';
 
 // Mini-catálogo demo para la vía "Buscar" (V1 sin backend). Cuando exista el catálogo
 // nutricional del CTO, esta lista viene del endpoint. Match = confianza "verified".
@@ -17,13 +19,14 @@ const CATALOG = [
 const METHODS = [
   { id: 'manual', icon: 'pencil', label: 'Manual', ready: true },
   { id: 'search', icon: 'search', label: 'Buscar', ready: true },
-  { id: 'scan', icon: 'barcode', label: 'Escanear', ready: false },
-  { id: 'photo', icon: 'camera', label: 'Foto de etiqueta', ready: false },
+  { id: 'scan', icon: 'barcode', label: 'Escanear', ready: true },
+  { id: 'photo', icon: 'camera', label: 'Foto de etiqueta', ready: true },
 ];
 
-// Bottom-sheet para agregar producto. Flujo: método → (manual | buscar) → Confirmar.
-// Escanear/Foto llegan en rebanada posterior (marcados "Pronto").
-export default function AddProductSheet({ onClose, onAdd }) {
+const TITLES = { method: 'Agregar a tu despensa', search: 'Buscar producto', scan: 'Escanear código', photo: 'Foto de etiqueta', confirm: 'Confirma el producto' };
+
+// Bottom-sheet para agregar producto. Flujo: método → (manual | buscar | escanear | foto) → Confirmar.
+export default function AddProductSheet({ onClose, onAdd, onPaywall }) {
   const [step, setStep] = useState('method'); // method | search | confirm
   const [draft, setDraft] = useState(null);
   const [query, setQuery] = useState('');
@@ -45,8 +48,15 @@ export default function AddProductSheet({ onClose, onAdd }) {
       setStep('confirm');
     } else if (id === 'search') {
       setStep('search');
+    } else if (id === 'scan') {
+      setStep('scan');
+    } else if (id === 'photo') {
+      setStep('photo');
     }
   };
+
+  // Escanear/Foto entregan un draft precargado → Confirmar (campos editables).
+  const onPrefill = (d) => { setDraft(d); setStep('confirm'); };
 
   const pickResult = (r) => {
     setDraft({ ...r, cantidad: '', confianza: 'verified' });
@@ -71,9 +81,7 @@ export default function AddProductSheet({ onClose, onAdd }) {
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && !saving && onClose()}>
       <div className="modal" role="dialog" aria-modal="true" aria-label="Agregar producto a tu despensa" style={{ maxWidth: 480 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--s3)' }}>
-          <h2 style={{ margin: 0, fontSize: 18 }}>
-            {step === 'method' ? 'Agregar a tu despensa' : step === 'search' ? 'Buscar producto' : 'Confirma el producto'}
-          </h2>
+          <h2 style={{ margin: 0, fontSize: 18 }}>{TITLES[step] || 'Agregar a tu despensa'}</h2>
           <button type="button" onClick={onClose} disabled={saving} aria-label="Cerrar" style={{ display: 'inline-flex', width: 'var(--touch)', height: 'var(--touch)', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', color: 'var(--text-3)', cursor: 'pointer', margin: '-8px -8px 0 0' }}>
             <Icon name="close" size={20} />
           </button>
@@ -139,6 +147,14 @@ export default function AddProductSheet({ onClose, onAdd }) {
               <button type="button" className="link-btn" onClick={() => setStep('method')}>‹ Otro método</button>
             </div>
           </>
+        )}
+
+        {step === 'scan' && (
+          <ScanView onDetected={onPrefill} onFallback={() => setStep('method')} onUseMethod={(m) => setStep(m)} />
+        )}
+
+        {step === 'photo' && (
+          <LabelCapture onExtracted={onPrefill} onPaywall={(pw) => { onClose(); onPaywall?.(pw); }} onFallback={() => setStep('method')} />
         )}
 
         {step === 'confirm' && (

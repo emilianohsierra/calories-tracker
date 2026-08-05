@@ -8,6 +8,7 @@ import PantrySearch from '@/components/pantry/PantrySearch';
 import FilterChips from '@/components/pantry/FilterChips';
 import AddProductSheet from '@/components/pantry/AddProductSheet';
 import PantryDetailSheet from '@/components/pantry/PantryDetailSheet';
+import UpgradeModal from '@/components/UpgradeModal';
 import { getPantry, addProduct, updateItem, deleteItem } from '@/lib/pantry/store';
 import { daysUntil, EXPIRY_WARN_DAYS } from '@/lib/pantry/constants';
 
@@ -20,6 +21,7 @@ export default function DespensaPage() {
   const [adding, setAdding] = useState(false);
   const [selected, setSelected] = useState(null);
   const [toast, setToast] = useState('');
+  const [paywall, setPaywall] = useState(null); // { variant, feature, usage } (foto de etiqueta)
 
   const load = useCallback(async () => {
     setStatus('loading');
@@ -148,8 +150,18 @@ export default function DespensaPage() {
 
       {toast && <div className="toast" role="status" style={{ position: 'fixed', left: '50%', bottom: 20, transform: 'translateX(-50%)', zIndex: 60, width: 'calc(100% - 32px)', maxWidth: 448 }}>{toast}</div>}
 
-      {adding && <AddProductSheet onClose={() => setAdding(false)} onAdd={onAdd} />}
+      {adding && <AddProductSheet onClose={() => setAdding(false)} onAdd={onAdd} onPaywall={setPaywall} />}
       {selected && <PantryDetailSheet item={selected} onClose={() => setSelected(null)} onUpdate={onUpdate} onDelete={onDelete} />}
+      {paywall && (
+        <UpgradeModal
+          variant={paywall.variant}
+          feature={paywall.feature}
+          usage={paywall.usage || { plan: 'free' }}
+          resetLabel={paywall.usage?.resetLabel}
+          onManual={() => setPaywall(null)}
+          onClose={() => setPaywall(null)}
+        />
+      )}
     </main>
   );
 }
