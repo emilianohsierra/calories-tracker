@@ -98,3 +98,56 @@ Despensa V1 (texto + barcode OFF + "¿qué puedo comer?") — EN CONSTRUCCIÓN
 
 ## TL;DR
 Faseo el delta en 5: **D1 espina** (`ProductSearchService` DB→cache→API + `confidence_score` + campos saturadas/subcategory/sku/package), **D2 crece-con-usuario** (`user_created`/verified + `product_images` + procedencia/versión) = el **network effect que construye el foso**, **D3 match** (dedup por nombre+marca+presentación + disambiguation UI), **D4 más fuentes MX** (Ada, cuando su eval cierre y detrás de la espina), **D5 sustituciones** (Pro/V2). **D1+D2 primero** — juntos entregan el WOW y encienden el crecimiento. **Todo el buscar/escanear/contribuir es Free** (la DB es foso, no tier); Pro sigue en coach/recos/sustituciones. Costo controlado por cache + aporte de usuarios; la variable real son las fuentes externas (Ada dimensiona). Métrica clave: hit-rate de escaneo y tasa de contribución.
+
+---
+
+# Faseo TÉCNICO (CTO) — brief Fase 2 → migraciones SQL + módulos de código
+
+> Complementa el faseo de PRODUCTO de arriba (D1–D5, Drucker). Aquí mapeo las **Fases 3–7 del brief
+> nuevo** a artefactos concretos. Cada fase = 1 migración SQL **aditiva idempotente** (la corre Emiliano)
+> + módulos de código puros/testeables, **deployable y verificable por separado**. Detalle de esquema:
+> `plan/producto-db-arquitectura.md` §12. Fuentes almacenables: OFF+USDA (**[Ada]** confirma); umbrales
+> NOM y clasificación de riesgo de aditivos: **[Ada]**.
+
+### Fase 3 — Barcode MVP · ✅ **YA HECHA** (en producción)
+- SQL: `supabase/producto-db.sql` (products+columnas, product_nutrition+saturated_fat/source_updated_at, product_images, product_alternatives, external_fetch_log, brands_norm_trgm). **Corrida.**
+- Código: `lib/pantry/product-search.js` (cache-first DB→OFF→id externa), `lib/pantry/off.js` (fetchOFF + cacheOFF + **searchOFFByName vía Search-a-licious**), `lib/pantry/product-brain.js` (dedupKey/confidence/decideMatch/pickBestSource), `app/api/pantry/search|products`, `sources.js` (UPCitemdb/BarcodeLookup id-only). Búsqueda por nombre vía OFF **ya viva**.
+- Verificable: barcode/nombre entran por el servicio; hit en DB no llama externo; `{match,confidence,source}`.
+
+### Fase 4 — Nombre + normalización + MX  *(el grueso del delta técnico)*
+- **Migración `producto-db-fase4.sql`:** `products += country, nutri_score, nova_group, data_quality, data_quality_score`; `brands += country`; `product_nutrition += trans_fat_g, serving_size, serving_unit`. Checks idempotentes (A–E, 1–4, enum calidad, 0..1). Sin tocar existentes.
+- **Código (módulos puros NUEVOS):** `lib/pantry/nutrition-normalize.js` (esquema canónico + `toCanonical` + `perServing` + interfaz `SourceAdapter`); `lib/pantry/country.js` (prefijo GS1→país); `lib/pantry/quality.js` (`calidadDe`→score+level). **Integración:** `localFuzzy` usa `similarity()` (§12.5); ranking bonifica `country=userCountry` (default MX); `cacheOFF` puebla country/nutri_score/nova/data_quality_score.
+- Verificable: "mayonesa" ordena por calidad/país; un producto MX (750…) rankea sobre uno ajeno; `data_quality` visible; tests de las funciones puras.
+
+### Fase 5 — OCR + no-encontrados + creación  *(mayormente YA, + capas de dato)*
+- **YA:** OCR `leerEtiqueta`, `crearProductoUsuario` (is_user_created), `product_images`, miss con "Agregar el tuyo" precargado. **En producción.**
+- **Migración `producto-db-fase5.sql`:** `product_ingredients(product_id, ingredient, position, source)`; `product_additives(product_id, additive_code, name, source[, nivel_riesgo])` — `nivel_riesgo` **SOLO si [Ada] confirma fuente libre**, si no se omite. RLS catálogo append (igual patrón).
+- **Código:** `lib/pantry/nom051.js` (sellos PUROS, **[Ada] umbrales**) → se expone en el shape del producto (compute-al-vuelo); parseo opcional de ingredientes desde OCR/OFF.
+- Verificable: producto con ingredientes/aditivos rastreables; sellos NOM reproducibles por test contra la etiqueta; sin umbrales de Ada, el módulo queda inerte (no inventa).
+
+### Fase 6 — Despensa + Coach + Recetas  *(integración, reuso)*
+- Sin esquema nuevo de DB de productos (recetas viven fuera de este catálogo). **Reuso:** la despensa y `¿qué puedo comer?` ya consumen `ProductSearchService`/`readItemsParaMatching`; el coach usa `filtrarDespensaSegura`. Se enriquecen con `nutri_score/nova/sellos/data_quality` ya disponibles (Fases 4–5) para mejores recomendaciones.
+- Verificable: el coach cita calidad/sellos del producto; nada nuevo que migrar aquí.
+
+### Fase 7 — Lista de compras + Sustituciones  *(Pro/diferido)*
+- **YA (tabla):** `shopping_lists/shopping_list_items` (despensa.sql) y `product_alternatives` (Fase 0) **creadas**.
+- **Código:** activar el feature de sustituciones (coach propone alternativas de misma `subcategory`, respetando alérgenos duros vía `safety.js`), poblar `product_alternatives`. Gating Pro (`plan/despensa-gating.md`).
+- Verificable: ante ingrediente ausente, 1–3 alternativas válidas mismas subcategoría/filtros.
+
+## Orden recomendado y dependencias
+```
+Fase 3 ✅ (base viva)
+  └─► Fase 4  (columnas + normalización + MX + calidad + fuzzy)   ← PRIORIDAD del delta técnico
+        ├─► Fase 5  (ingredientes/aditivos + NOM)  [Ada: umbrales/riesgo]
+        └─► (USDA como 2º adapter — [Ada] licencia/orden)
+              └─► Fase 6 (integración coach, reuso)
+                    └─► Fase 7 (sustituciones, Pro)
+```
+- **Fase 4 es el bloque técnico central** (habilita nivel Yuka: nutri-score/nova/calidad/multi-país/fuzzy real). **Fase 5** añade el dato fino (ingredientes/aditivos/sellos) y depende de **[Ada]**. USDA entra como **2º adapter** cuando Ada cierre licencia/orden — sin cambiar el contrato del servicio.
+- Cada migración es aditiva/idempotente/deploy-safe; el código nuevo son **funciones puras testeables** + integración en el servicio existente. **No** se toca Stripe ni `safety.js`.
+
+## Campos/umbrales dependientes de Ada (marcados)
+- Orden y licencia de **fuentes** (USDA y otras MX) — [Ada].
+- **Umbrales NOM-051** para `nom051.js` — [Ada] (sin ellos el módulo no se activa).
+- **`product_additives.nivel_riesgo`** — sólo si hay **fuente libre** de clasificación — [Ada]; si no, se omite (no inventar riesgo).
+- Licencia de imágenes de fuentes ≠ OFF antes de enlazarlas — [Ada].

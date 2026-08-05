@@ -315,3 +315,107 @@ Cada fase: aditiva, deploy-safe, QA por rebanada, sin tocar Stripe, sin sobrescr
 2. **UPDATE server-only de `products`** (§7): requiere una policy nueva por service_role. ¿OK abrir ese seam controlado o preferimos append-only también en el núcleo (nueva fila producto + `dedup_key` que reapunta)? Recomiendo UPDATE server-only acotado (más simple, menos huérfanos).
 3. **Licencia:** confirmar con Ada qué fuentes permiten cachear en nuestra DB antes de la Fase 2 (bloqueante legal).
 4. **`product_alternatives` en V1:** crear tabla vacía ahora (recomendado) vs. diferir. Recomiendo crear para no re-migrar.
+
+---
+
+# 12. FASE 2 — Delta "nivel OFF/Yuka/MyRealFood", enfoque MÉXICO (PROPUESTA)
+
+> Estado: **propuesta, NO implementar** (espera GO). Todo ADITIVO sobre lo vivo. Fuentes legalmente
+> almacenables asumidas **OFF + USDA** (Ada confirma); campos marcados **[Ada]** dependen de su hallazgo.
+> Reusa lo ya construido (§1–§11): `ProductSearchService`, procedencia por fuente, `confidence_score`,
+> `dedup_key`, `product_images`, `external_fetch_log`, `products/product_nutrition/product_alternatives`,
+> búsqueda por nombre vía OFF Search-a-licious. **No se rehace nada de eso.**
+
+## 12.1 Tablas/columnas — YA CUBIERTO vs NUEVO
+
+| Elemento del brief | Estado | Detalle |
+|---|---|---|
+| `brands.id/name` | ✅ YA | `brands(id,name,norm,created_by)` |
+| `brands.country` | ❌ NUEVO | `alter table brands add column country text` (código país ISO-2) |
+| `categories.id/name/parent_category` | ✅ YA | `categories(id,name,norm,parent_id)` — **`parent_id` ES el `parent_category`** (self-FK, ya soporta jerarquía). No hace falta nada |
+| `ingredients(product_id/ingredient/position)` | ❌ NUEVO | tabla `product_ingredients(product_id, ingredient text, position int, source text)` |
+| `additives(product_id/additive_code/name/source)` | ❌ NUEVO | tabla `product_additives(product_id, additive_code, name, source text)`. `nivel_riesgo` **[Ada]** — SOLO si confirma fuente libre para clasificación de riesgo; si no, **se omite** (no inventar riesgo) |
+| `products.nutri_score` | ❌ NUEVO | `char(1)` check A–E (dato de OFF) |
+| `products.nova_group` | ❌ NUEVO | `smallint` check 1–4 (dato de OFF) |
+| `products.data_quality` (enum) | ❌ NUEVO | `text check in ('verified','community','estimated','incomplete')` — rollup categórico (§12.4) |
+| `products.data_quality_score` | ❌ NUEVO | `numeric 0..1` de **completitud** (§12.4). **Distinto** de `confidence_score` (que ya existe y mide confianza del *match/fuente*); documentar los dos ejes |
+| `products.country` | ❌ NUEVO | **el brief lo asume existente, pero NO existe** → se agrega. ISO-2, inferible del prefijo de barcode (§12.6) |
+| `products.confidence_score / dedup_key / is_user_created / presentacion` | ✅ YA | reusar tal cual (Fase 0) |
+| `products.subcategory / sku / package_*` | ✅ YA | reusar (Fase 0) |
+| `product_nutrition.saturated_fat_g` | ✅ YA | Fase 0 |
+| `product_nutrition.trans_fat_g` | ❌ NUEVO | grasas trans (necesario para sello NOM y salud) |
+| `product_nutrition.serving_size + serving_unit` | ❌ NUEVO | porción declarada en la etiqueta (además del canónico por-100g). Hoy `base_unit='porcion'` sirve para 1 fila, pero se quiere **por-100g Y por-porción**; columnas explícitas evitan filas duplicadas |
+| `product_nutrition.source/source_ref/source_updated_at/nivel/allergens` | ✅ YA | procedencia por fuente (Fase 0/§5) |
+| `product_images` (multi-imagen) | ✅ YA | Fase 0 |
+| `product_alternatives` | ✅ YA | creada (Fase 0), feature en Fase 7 |
+
+**Regla:** ✅ se reusa; ❌ es columna/tabla nueva **aditiva idempotente**. Nada existente cambia de tipo.
+
+## 12.2 Normalización multi-fuente (interfaz genérica)
+
+Hoy `lib/pantry/off.js` (`mapOFF`, `mapSaLHit`) ya convierte los nutrimentos de OFF a nuestras claves. Se
+**formaliza** en una capa única `lib/pantry/nutrition-normalize.js` (NUEVO) con:
+
+- **Esquema canónico** por-100g: `{ calories_per_100g, protein_g, carbs_g, fat_g, saturated_fat_g, trans_fat_g, fiber_g, sugars_g, sodium_mg, nutri_score?, nova_group? }`. Nada de invención: ausente = `null`.
+- **`toCanonical(raw, sourceKind)`**: mapea alias de cada fuente → canónico. Cubre hoy `energy-kcal_100g | calories | kcal → calories_per_100g` y equivalentes de proteína/grasa/carbs/fibra/azúcar/sodio. OFF ya resuelto; USDA se suma como otro `case`.
+- **Interfaz de adapter** (para sumar fuentes sin tocar el servicio):
+  ```
+  SourceAdapter = {
+    key: 'open_food_facts' | 'usda' | ...,
+    nivel: 'verificado',
+    fetchByBarcode(code): Promise<RawProduct|null>,
+    searchByName(q, {limit}): Promise<RawProduct[]>,
+    toCanonical(raw): CanonicalProduct   // usa nutrition-normalize
+  }
+  ```
+  El `ProductSearchService` (§5) itera una **lista ordenada de adapters** (Ada define el orden); OFF es el primer adapter (ya vivo). Añadir USDA = un archivo `lib/pantry/sources/usda.js` que implementa la interfaz.
+- **Por-porción**: `perServing(canon100, serving_size, serving_unit)` (pura) escala del canónico por-100g. Se computa al vuelo para la UI; `serving_size/serving_unit` se persisten (§12.1) para reproducir la etiqueta.
+
+## 12.3 Sellos NOM-051 (México)
+
+Función **PURA** `lib/pantry/nom051.js` (NUEVO): `sellosNOM051(nutricionPor100, tipo)` → `{ calorias, azucares, grasas_sat, grasas_trans, sodio }` (booleans) según **umbrales oficiales NOM-051 [Ada entrega los umbrales]**. Sólo **reproduce la etiqueta** (no es asesoría médica); determinista y testeable.
+
+- **Decisión: computar-al-vuelo** (source of truth), no almacenar el veredicto — los umbrales pueden ajustarse y no queremos sellos obsoletos; el cómputo es O(1). *Opcional* cachear un `sellos jsonb` en `product_nutrition` **sólo** para filtrar/ordenar en SQL a escala (se recomputa al escribir; nunca es la verdad). Requiere `trans_fat_g` (§12.1).
+- **Bloqueante:** sin umbrales de Ada no se activa el cómputo (no inventamos umbrales).
+
+## 12.4 `data_quality_score` + enum de calidad
+
+Función pura `lib/pantry/quality.js` (NUEVO): `calidadDe(product)` → `{ score, level }`.
+
+```
+score =  0.20·tieneBarcode
+       + 0.15·tieneImagen
+       + 0.25·nutricionCompleta(kcal+prot+carb+gras)
+       + 0.10·tieneMarca
+       + 0.10·tieneIngredientes
+       + 0.20·confianzaFuente(verificado 1 / usuario 0.5 / estimado 0.25)
+level = verified   si score≥0.8 y nivel='verificado'
+      | community  si is_user_created y score≥0.5
+      | estimated  si nivel='estimado_ia' o score∈[0.3,0.5)
+      | incomplete si faltan macros esenciales o score<0.3
+```
+
+- **Se persiste** `data_quality_score` + `data_quality` (denormalizados para **ordenar** resultados de búsqueda por calidad), **recomputados por la función pura en cada escritura** (nunca a mano). `confidence_score` sigue midiendo el *match/fuente*; `data_quality_score` mide *completitud del dato*. Dos ejes complementarios.
+- **Regla de oro:** un `estimated`/`incomplete` **nunca** se presenta como exacto — la UI ya usa el badge de `confianza`; se añade el nivel de calidad al mismo.
+
+## 12.5 Búsqueda tolerante a errores (pg_trgm)
+
+Ya existen `products_norm_trgm` y `brands_norm_trgm` (GIN). Se **integra `similarity()`** en la rama de nombre del `ProductSearchService` (hoy usa `ilike`):
+
+- `localFuzzy` pasa a `... where similarity(norm, :q) > 0.3 order by similarity desc limit K` (recupera top-K real por trigramas; el cerebro `simNombre`/`rankCandidates` re-rankea). Fallback `ilike` si `pg_trgm` faltara.
+- **Ejes de búsqueda** (todos vía `normalizeQuery` + `rankCandidates`): barcode, nombre, marca (`brands.norm` trgm), nombre+marca, categoría (`categories.norm`). El cerebro ya pondera marca/presentación/categoría (§5.3).
+
+## 12.6 Multi-país (MX/US/ES/AR/CO/CL) sin rehacer
+
+- `products.country` + `brands.country` (§12.1). **Inferencia por prefijo GS1 del barcode** al cachear (`lib/pantry/country.js`, NUEVO): `750→MX, 0–13→US/CA, 84→ES, 779→AR, 770→CO, 780→CL, 8400–8449→ES…`. Determinista, sin fuente externa.
+- **Priorización:** el `ProductSearchService` recibe `userCountry` (default `MX`) y el ranking **bonifica `country=userCountry`** (empate a favor de MX cuando el usuario está en MX). Cambiar de país = cambiar el parámetro; **no** se re-migra. Preparado para los 6 países desde el día 1.
+
+## 12.7 Imágenes: URL externa vs storage propio (licencia)
+
+- **Imágenes de OFF/fuente → se REFERENCIAN por URL externa** (`images.openfoodfacts.org/...`) en `product_images.image_url` con `source='open_food_facts'`. **Justificación:** ODbL permite uso con **atribución** ("Datos de Open Food Facts") y su CDN es hotlink-friendly; **no copiamos** el binario → cero costo de storage y menos fricción share-alike (enlazamos, no redistribuimos el archivo). 
+- **Imágenes subidas por el USUARIO → storage propio** (bucket `meal-photos`, path `{uid}/pantry/...`, ya implementado) con `source='user'`. Son nuestras, RLS por usuario.
+- `product_images.source` ya distingue ambos → **decisión ya soportada por el esquema**; sólo se fija la política. (Revisión legal de USDA/otras fuentes antes de enlazarlas — [Ada].)
+
+## 12.8 Faseo técnico (mapa a SQL + módulos) → ver `plan/producto-db-fases.md` §CTO
+
+Resumen: **Fase 3 (barcode MVP) = ✅ HECHA**; **Fase 4** = migración de columnas (country/nutri_score/nova/data_quality*/trans_fat/serving) + `nutrition-normalize` + `country` + `similarity()` + `quality`; **Fase 5** = `product_ingredients`(+`product_additives` [Ada]) + `nom051` [Ada umbrales] + OCR (ya vivo); **Fase 6** = integración despensa/coach (reuso); **Fase 7** = `product_alternatives` feature (ya creada la tabla). Cada fase: migración aditiva idempotente + módulos puros testeables, deployable y verificable por separado (detalle en fases.md).
