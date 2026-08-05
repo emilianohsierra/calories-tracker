@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Icon from '@/components/ui/Icon';
-import { normalizeNutricion, imageOf } from '@/lib/pantry/constants';
+import { productToDraft } from '@/lib/pantry/productSearch';
 
 // Escanear código de barras. 3 vías, de mayor a menor soporte:
 //  - Cámara EN VIVO con BarcodeDetector nativa (Android/Chrome).
@@ -38,23 +38,13 @@ export default function ScanView({ onDetected, onFallback, onUseMethod }) {
     try {
       const res = await fetch(`/api/pantry/search?code=${encodeURIComponent(code)}`);
       const data = await res.json().catch(() => ({}));
-      const p = data.product;
+      // Shape nuevo {match, producto}; alias legacy data.product por compat.
+      const p = data.producto || data.product;
       if (res.ok && p) {
-        onDetected({
-          product_id: p.product_id,
-          nombre: p.nombre || '',
-          marca: p.marca || '',
-          categoria: 'otros',
-          unidad: 'g',
-          cantidad: '',
-          nutricion: normalizeNutricion(p.nutricion), // kcal/P/C/G + fibra/azúcar/sodio/porción
-          confianza: p.confianza || 'verified',
-          imagen: imageOf(p), // foto del producto (OFF)
-          codigo: code,
-        });
+        onDetected({ ...productToDraft(p), codigo: p.codigo || code });
         return;
       }
-      setPhase('notfound'); // {found:false} → ofrecer etiqueta/manual
+      setPhase('notfound'); // miss → ofrecer etiqueta/manual
     } catch (e) {
       setErrText(String(e?.message || e));
       setPhase('error');

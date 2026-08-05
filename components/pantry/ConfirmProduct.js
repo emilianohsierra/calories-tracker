@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import ConfidenceBadge from '@/components/pantry/ConfidenceBadge';
 import { CATEGORIES, UNITS, imageOf } from '@/lib/pantry/constants';
@@ -9,13 +9,23 @@ import { CATEGORIES, UNITS, imageOf } from '@/lib/pantry/constants';
 // guardar. Si el usuario edita un dato "verificado/estimado", su confianza baja a "tuyo".
 export default function ConfirmProduct({ draft, onCancel, onSave, saving = false }) {
   const [form, setForm] = useState(() => ({
-    nombre: '', marca: '', categoria: 'otros', cantidad: '', unidad: 'g', caduca_el: '',
+    nombre: '', marca: '', categoria: 'otros', cantidad: '', unidad: 'g', caduca_el: '', codigo: '',
     nutricion: { kcal: '', prot: '', carb: '', gras: '', fibra: '', azucar: '', sodio: '', porcion: '' },
     confianza: 'user', imagen: '',
     ...draft,
     nutricion: { kcal: '', prot: '', carb: '', gras: '', fibra: '', azucar: '', sodio: '', porcion: '', ...(draft?.nutricion || {}) },
   }));
   const productImg = imageOf(form);
+  const photoRef = useRef(null);
+  // Producto propio (lo capturó el usuario, sin match de catálogo) → puede añadir foto/código.
+  const esPropio = form.confianza === 'user';
+
+  const onPhoto = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setForm((f) => ({ ...f, imagen: URL.createObjectURL(file) })); // preview; subida real = backend V2
+  };
 
   // Editar un campo baja la confianza a "user" si venía de catálogo/IA.
   const downgrade = (c) => (c === 'verified' || c === 'ai' ? 'user' : c);
@@ -47,19 +57,31 @@ export default function ConfirmProduct({ draft, onCancel, onSave, saving = false
 
   return (
     <div className="form-grid" style={{ marginTop: 'var(--s2)' }}>
-      {productImg && (
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
+      {productImg ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={productImg} alt={form.nombre || 'Producto'} style={{ maxHeight: 140, maxWidth: '100%', objectFit: 'contain', borderRadius: 'var(--r-md)', border: '1px solid var(--border)', background: 'var(--surface-2)' }} />
+          {esPropio && <button type="button" className="link-btn" onClick={() => photoRef.current?.click()}>Cambiar foto</button>}
         </div>
-      )}
+      ) : esPropio ? (
+        <button type="button" className="btn btn-ghost" onClick={() => photoRef.current?.click()} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <Icon name="camera" size={16} /> Agregar foto (opcional)
+        </button>
+      ) : null}
+      <input ref={photoRef} type="file" accept="image/*" hidden onChange={onPhoto} />
       <div className="field">
         <label htmlFor="cp-nombre">Nombre</label>
         <input id="cp-nombre" type="text" value={form.nombre} maxLength={80} onChange={(e) => set('nombre', e.target.value)} />
       </div>
-      <div className="field">
-        <label htmlFor="cp-marca">Marca (opcional)</label>
-        <input id="cp-marca" type="text" value={form.marca} maxLength={60} onChange={(e) => set('marca', e.target.value)} />
+      <div className="form-row">
+        <div className="field">
+          <label htmlFor="cp-marca">Marca (opcional)</label>
+          <input id="cp-marca" type="text" value={form.marca} maxLength={60} onChange={(e) => set('marca', e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="cp-codigo">Código de barras (opcional)</label>
+          <input id="cp-codigo" type="text" inputMode="numeric" value={form.codigo || ''} maxLength={32} onChange={(e) => set('codigo', e.target.value)} />
+        </div>
       </div>
       <div className="form-row">
         <div className="field">
@@ -89,7 +111,10 @@ export default function ConfirmProduct({ draft, onCancel, onSave, saving = false
       </div>
 
       <fieldset style={{ border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: 'var(--s3)', margin: 0 }}>
-        <legend className="c-subtitle" style={{ padding: '0 6px' }}>Nutrición por 100 g/ml (opcional)</legend>
+        <legend className="c-subtitle" style={{ padding: '0 6px' }}>
+          Nutrición {Number(form.nutricion.porcion) > 0 ? `por porción (${Math.round(Number(form.nutricion.porcion))} g)` : 'por 100 g/ml'} (opcional)
+        </legend>
+        <p className="c-subtitle" style={{ margin: '0 0 var(--s2)', color: 'var(--text-3)' }}>Deja lo que sepas; no inventamos valores.</p>
         <div className="form-row">
           <div className="field">
             <label htmlFor="cp-kcal">kcal</label>

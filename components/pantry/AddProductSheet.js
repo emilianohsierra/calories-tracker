@@ -5,16 +5,7 @@ import Icon from '@/components/ui/Icon';
 import ConfirmProduct from '@/components/pantry/ConfirmProduct';
 import ScanView from '@/components/pantry/ScanView';
 import LabelCapture from '@/components/pantry/LabelCapture';
-
-// Mini-catálogo demo para la vía "Buscar" (V1 sin backend). Cuando exista el catálogo
-// nutricional del CTO, esta lista viene del endpoint. Match = confianza "verified".
-const CATALOG = [
-  { nombre: 'Huevo', marca: 'San Juan', categoria: 'proteinas', unidad: 'pza', nutricion: { kcal: 143, prot: 13, carb: 1.1, gras: 9.5 } },
-  { nombre: 'Arroz blanco', marca: 'Verde Valle', categoria: 'carbos', unidad: 'g', nutricion: { kcal: 130, prot: 2.7, carb: 28, gras: 0.3 } },
-  { nombre: 'Frijol negro', marca: 'La Sierra', categoria: 'proteinas', unidad: 'g', nutricion: { kcal: 91, prot: 6, carb: 16, gras: 0.5 } },
-  { nombre: 'Leche descremada', marca: 'Lala', categoria: 'lacteos', unidad: 'ml', nutricion: { kcal: 35, prot: 3.4, carb: 5, gras: 0.1 } },
-  { nombre: 'Atún en agua', marca: 'Dolores', categoria: 'proteinas', unidad: 'g', nutricion: { kcal: 116, prot: 26, carb: 0, gras: 1 } },
-];
+import ProductSearchStep from '@/components/pantry/ProductSearchStep';
 
 const METHODS = [
   { id: 'manual', icon: 'pencil', label: 'Manual', ready: true },
@@ -27,9 +18,8 @@ const TITLES = { method: 'Agregar a tu despensa', search: 'Buscar producto', sca
 
 // Bottom-sheet para agregar producto. Flujo: método → (manual | buscar | escanear | foto) → Confirmar.
 export default function AddProductSheet({ onClose, onAdd, onPaywall }) {
-  const [step, setStep] = useState('method'); // method | search | confirm
+  const [step, setStep] = useState('method'); // method | search | scan | photo | confirm
   const [draft, setDraft] = useState(null);
-  const [query, setQuery] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -55,13 +45,8 @@ export default function AddProductSheet({ onClose, onAdd, onPaywall }) {
     }
   };
 
-  // Escanear/Foto entregan un draft precargado → Confirmar (campos editables).
+  // Buscar/Escanear/Foto entregan un draft precargado → Confirmar (campos editables).
   const onPrefill = (d) => { setDraft(d); setStep('confirm'); };
-
-  const pickResult = (r) => {
-    setDraft({ ...r, cantidad: '', confianza: 'verified' });
-    setStep('confirm');
-  };
 
   const save = async (item) => {
     setSaving(true);
@@ -72,10 +57,6 @@ export default function AddProductSheet({ onClose, onAdd, onPaywall }) {
       setSaving(false);
     }
   };
-
-  const results = query.trim()
-    ? CATALOG.filter((c) => `${c.nombre} ${c.marca}`.toLowerCase().includes(query.trim().toLowerCase()))
-    : CATALOG;
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && !saving && onClose()}>
@@ -120,33 +101,7 @@ export default function AddProductSheet({ onClose, onAdd, onPaywall }) {
         )}
 
         {step === 'search' && (
-          <>
-            <div role="search" style={{ display: 'flex', alignItems: 'center', gap: 'var(--s2)', padding: '0 var(--s4)', minHeight: 'var(--touch)', borderRadius: 'var(--r-pill)', background: 'var(--surface-2)', border: '1px solid var(--border)', marginBottom: 'var(--s3)' }}>
-              <span aria-hidden="true" style={{ color: 'var(--text-3)', display: 'inline-flex' }}><Icon name="search" size={18} /></span>
-              <input type="text" autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Nombre o marca…" aria-label="Buscar en el catálogo" style={{ flex: 1, border: 'none', background: 'transparent', color: 'var(--text)', fontSize: 15, outline: 'none', minWidth: 0 }} />
-            </div>
-            <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 'var(--s2)' }}>
-              {results.map((r) => (
-                <li key={`${r.nombre}-${r.marca}`}>
-                  <button type="button" onClick={() => pickResult(r)} style={{ width: '100%', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--s2)', padding: 'var(--s3)', minHeight: 'var(--touch)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer' }}>
-                    <span>
-                      <span style={{ fontWeight: 600 }}>{r.nombre}</span>
-                      {r.marca && <span className="c-subtitle"> · {r.marca}</span>}
-                    </span>
-                    <span className="num" style={{ color: 'var(--text-2)', fontSize: 13 }}>{r.nutricion.kcal} kcal</span>
-                  </button>
-                </li>
-              ))}
-              {results.length === 0 && (
-                <li className="c-subtitle" style={{ padding: 'var(--s3)' }}>
-                  No está en el catálogo. <button type="button" className="link-btn" onClick={() => { setDraft({ nombre: query, confianza: 'user' }); setStep('confirm'); }}>Agrégalo manual</button>
-                </li>
-              )}
-            </ul>
-            <div style={{ marginTop: 'var(--s3)' }}>
-              <button type="button" className="link-btn" onClick={() => setStep('method')}>‹ Otro método</button>
-            </div>
-          </>
+          <ProductSearchStep onPick={onPrefill} onUseMethod={(m) => setStep(m)} onBack={() => setStep('method')} />
         )}
 
         {step === 'scan' && (
