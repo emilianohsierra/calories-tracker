@@ -56,6 +56,14 @@ export async function GET(request) {
     ? { barcode: code, userId: user.id }
     : { ...normalizeQuery(q), userId: user.id };
 
-  const r = await buscarProducto({ supabase, admin }, query);
+  // Un fallo del servicio NUNCA debe volverse 500 (el cliente caería a un mock que fabrica datos).
+  // Ante error → miss accionable (la UI ofrece foto de etiqueta / agregar manual precargado).
+  let r;
+  try {
+    r = await buscarProducto({ supabase, admin }, query);
+  } catch (e) {
+    console.error('buscarProducto:', e?.message);
+    return NextResponse.json({ match: 'miss', producto: null, candidatos: [], found: false, error: 'search_failed' });
+  }
   return NextResponse.json(toResponse(r));
 }
