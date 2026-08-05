@@ -10,11 +10,12 @@ const ICONS = {
   target: 'M8 3v2M8 11v2M3 8h2M11 8h2M8 5.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z',
 };
 
-export default function QuickActions({ visible, onAnalizar, onSend, onNav }) {
+export default function QuickActions({ visible, onAnalizar, onSend, onNav, onPuedoComer }) {
   if (!visible) return null;
   const items = [
     { id: 'analizar', label: 'Analizar comida', icon: 'camera', run: () => onAnalizar?.() },
-    { id: 'puedo_comer', label: '¿Qué puedo comer?', icon: 'help', run: () => onSend?.('¿Qué puedo comer con lo que me queda hoy?') },
+    // Endpoint DEDICADO (no chat): habilita 429 → paywall. Ver app/coach/page.js.
+    { id: 'puedo_comer', label: '¿Qué puedo comer?', icon: 'help', run: () => onPuedoComer?.() },
     { id: 'progreso', label: 'Mi progreso', icon: 'trend', run: () => onSend?.('¿Cómo voy esta semana?') },
     { id: 'plan_hoy', label: 'Plan de hoy', icon: 'plan', run: () => onSend?.('¿Cuál es mi plan de hoy?') },
     { id: 'cambiar_objetivo', label: 'Cambiar objetivo', icon: 'target', run: () => onNav?.('/perfil') },

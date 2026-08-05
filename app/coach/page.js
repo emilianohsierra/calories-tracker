@@ -6,6 +6,7 @@ import UpgradeModal from '@/components/UpgradeModal';
 import PersonalityPicker from '@/components/coach/PersonalityPicker';
 import MessageRenderer from '@/components/coach/MessageRenderer';
 import MealCard from '@/components/coach/cards/MealCard';
+import OptionCard from '@/components/pantry/OptionCard';
 import PlanDiff from '@/components/PlanDiff';
 import ThemeToggle from '@/components/ThemeToggle';
 import CoachOrb from '@/components/coach/CoachOrb';
@@ -137,6 +138,77 @@ export default function CoachPage() {
     if (!lastUser) return;
     setLastBubble({ content: '' }); // vuelve la última burbuja a "cargando"
     runChat(lastUser.content);
+  };
+
+  // "¿Qué puedo comer?" — endpoint DEDICADO (no chat) para poder disparar el paywall:
+  // 200 → <=3 Opciones (forma que consume OptionCard). 429 → UpgradeModal (limit, despensa_reco).
+  const requestQuePuedoComer = async () => {
+    if (busy) return;
+    setMessages((m) => [...m, { role: 'user', content: '¿Qué puedo comer?' }, { role: 'assistant', content: '' }]);
+    setBusy(true);
+    try {
+      const res = await fetch('/api/coach/que-puedo-comer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json().catch(() => ({}));
+      // 429 (cap Free agotado) → muro con el payload dedicado del endpoint.
+      if (res.status === 429) {
+        setMessages((m) => m.slice(0, -1)); // quita la burbuja vacía del coach
+        setPaywall({
+          variant: data.variant || 'limit',
+          feature: data.feature || 'despensa_reco',
+          usage: data.usage || null,
+        });
+        return;
+      }
+      const pw = readPaywall(res.status, data);
+      if (pw) {
+        setMessages((m) => m.slice(0, -1));
+        setPaywall(pw);
+        return;
+      }
+      const opciones = data.opciones || data.options || [];
+      if (!res.ok || opciones.length === 0) {
+        setLastBubble({ error: true, diag: data.error || 'sin opciones' });
+        return;
+      }
+      setLastBubble({ options: opciones });
+    } catch (e) {
+      console.error('que-puedo-comer fail:', e);
+      setLastBubble({ error: true, diag: String(e?.message || e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // "Registrar" de una Opción de la despensa: registra la comida y manda los items
+  // (pantry_item_id + cantidad) para el descuento de despensa (backend los usa cuando exista).
+  const onRegisterOption = async (items, option) => {
+    try {
+      const now = new Date();
+      const res = await fetch('/api/meals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: localDateStr(now),
+          time: now.toTimeString().slice(0, 5),
+          title: option.titulo,
+          calories: option.kcal,
+          protein_g: option.macros?.prot,
+          carbs_g: option.macros?.carb,
+          fat_g: option.macros?.gras,
+          ingredients: [],
+          meal_type: 'comida',
+          confidence: 'estimado',
+          pantry_items: items,
+        }),
+      });
+      if (res.ok) loadUsage();
+      return res.ok;
+    } catch {
+      return false;
+    }
   };
 
   // Acción de una tarjeta (Karpathy): navegar o re-preguntar al coach.
@@ -280,6 +352,13 @@ export default function CoachPage() {
                 <button type="button" className="link-btn retry" onClick={retry} disabled={busy}>Reintentar</button>
                 {debug && m.diag && <span className="ring-caption">{m.diag}</span>}
               </div>
+            ) : m.options ? (
+              <div className="coach-msg">
+                <div className="coach-titular">Con lo que tienes y tu meta de hoy:</div>
+                {m.options.map((op, k) => (
+                  <OptionCard key={k} option={op} onRegister={m.fromHistory ? undefined : onRegisterOption} />
+                ))}
+              </div>
             ) : m.proposal ? (
               <div className="coach-msg">
                 <div className="coach-titular">Esto detecté en tu foto. ¿Lo registro?</div>
@@ -330,6 +409,7 @@ export default function CoachPage() {
         onAnalizar={() => fileRef.current?.click()}
         onSend={(t) => send(t)}
         onNav={(p) => router.push(p)}
+        onPuedoComer={requestQuePuedoComer}
       />
 
       <Composer

@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import Icon from '@/components/ui/Icon';
 
 // Tarjeta de comida sugerida (Karpathy §4: bloque `meal`). Título + chips de macros +
 // ingredientes. "Registrar" reusa el guardado existente vía onRegister (POST /api/meals).
-export default function MealCard({ titulo, kcal = 0, prot_g = 0, carb_g = 0, gras_g = 0, ingredientes = [], tiempo_min = 0, costo = '', onRegister }) {
+// pantryUses: nº de ingredientes que salen de la despensa del usuario ("¿qué puedo comer?").
+export default function MealCard({ titulo, kcal = 0, prot_g = 0, carb_g = 0, gras_g = 0, ingredientes = [], tiempo_min = 0, costo = '', pantryUses = 0, onRegister }) {
   const [state, setState] = useState('idle'); // idle | saving | done
 
   const register = async () => {
@@ -32,6 +34,11 @@ export default function MealCard({ titulo, kcal = 0, prot_g = 0, carb_g = 0, gra
       )}
       {(tiempo_min > 0 || costo) && (
         <div className="ring-caption num">{tiempo_min > 0 ? `${Math.round(tiempo_min)} min` : ''}{tiempo_min > 0 && costo ? ' · ' : ''}{costo}</div>
+      )}
+      {pantryUses > 0 && (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: 'var(--brand-strong)' }}>
+          <Icon name="box" size={13} /> usa {pantryUses} de tu despensa
+        </div>
       )}
       {onRegister ? (
         <div className="c-card__actions">

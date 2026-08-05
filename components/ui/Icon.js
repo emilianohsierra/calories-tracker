@@ -33,6 +33,13 @@ const PATHS = {
   sun: '<circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   moon: '<path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8Z"/>',
   monitor: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  // Despensa
+  search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+  barcode: '<path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14M21 5v14"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  box: '<path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
+  minus: '<path d="M5 12h14"/>',
+  filter: '<path d="M3 5h18l-7 8v6l-4-2v-4L3 5Z"/>',
 };
 
 export default function Icon({ name, size = 24, strokeWidth = 1.5, title, className, ...rest }) {
