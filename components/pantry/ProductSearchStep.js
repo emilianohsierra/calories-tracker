@@ -24,8 +24,9 @@ export default function ProductSearchStep({ onPick, onUseMethod, onBack }) {
 
   const miss = (
     <ProductMiss
+      nombre={q.trim()}
       onEtiqueta={() => onUseMethod?.('photo')}
-      onManual={() => onPick?.({ confianza: 'user', nombre: q.trim() })}
+      onManual={() => onPick?.({ confianza: 'user', nombre: q.trim(), is_user_created: true })}
     />
   );
 

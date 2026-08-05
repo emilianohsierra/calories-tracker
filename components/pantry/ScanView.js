@@ -22,6 +22,7 @@ export default function ScanView({ onDetected, onFallback, onUseMethod }) {
   const [phase, setPhase] = useState('init'); // init | scanning | photo | denied | looking | notfound | error | nocode
   const [manual, setManual] = useState('');
   const [errText, setErrText] = useState('');
+  const [status, setStatus] = useState(''); // indicador EN PANTALLA del estado del escáner (diagnóstico)
 
   const hasCamera = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
   const hasDetector = typeof window !== 'undefined' && 'BarcodeDetector' in window;
@@ -83,6 +84,16 @@ export default function ScanView({ onDetected, onFallback, onUseMethod }) {
     }
   };
 
+  const handleCamError = (err) => {
+    setStatus('');
+    if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError' || err?.name === 'NotFoundError') {
+      setPhase('denied');
+    } else {
+      setErrText(String(err?.message || err));
+      setPhase('photo'); // cualquier otro fallo de cámara viva → foto/manual (también decodifica)
+    }
+  };
+
   // Formatos que la BarcodeDetector del dispositivo REALMENTE soporta (algunas Androids lanzan si
   // se pide uno no soportado). Devuelve el subconjunto usable o null → entonces usamos zxing.
   const detectorFormats = async () => {
@@ -95,14 +106,24 @@ export default function ScanView({ onDetected, onFallback, onUseMethod }) {
     }
   };
 
-  // Bucle nativo BarcodeDetector sobre el <video> ya reproduciéndose.
-  const runDetectorLoop = (formats) => {
+  // RUTA A — BarcodeDetector nativa (Android/Chrome): nuestro getUserMedia + loop sobre el <video>.
+  const startDetectorPath = async (formats) => {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } });
+    if (stoppedRef.current) { stream.getTracks().forEach((t) => t.stop()); return; }
+    streamRef.current = stream;
+    const video = videoRef.current;
+    if (!video) { stopCamera(); setPhase('photo'); return; }
+    video.srcObject = stream;
+    video.setAttribute('playsinline', 'true');
+    await video.play().catch(() => {});
+    setPhase('scanning');
+    setStatus('Cámara activa · buscando código (detección nativa)…');
     const detector = new window.BarcodeDetector({ formats });
     const tick = async () => {
       if (stoppedRef.current || !videoRef.current) return;
       try {
         const codes = await detector.detect(videoRef.current);
-        if (codes && codes.length && codes[0].rawValue) { lookup(codes[0].rawValue); return; }
+        if (codes && codes.length && codes[0].rawValue) { setStatus('¡Código detectado!'); lookup(codes[0].rawValue); return; }
       } catch {
         // frame ilegible: seguir intentando
       }
@@ -111,18 +132,37 @@ export default function ScanView({ onDetected, onFallback, onUseMethod }) {
     rafRef.current = requestAnimationFrame(tick);
   };
 
-  // Bucle EN VIVO con @zxing sobre el MISMO <video>/stream (iOS Safari, Firefox, sin BarcodeDetector).
-  const runZxingLoop = async (video) => {
-    const { BrowserMultiFormatReader } = await import('@zxing/browser'); // code-split
-    const reader = new BrowserMultiFormatReader();
-    // decodeFromVideoElement decodifica frames del elemento que ya está reproduciendo NUESTRO stream
-    // (no re-pide cámara). El callback recibe NotFound por frame vacío → solo actuamos ante result.
-    zxingControlsRef.current = await reader.decodeFromVideoElement(video, (result) => {
-      if (result && !stoppedRef.current) {
-        const code = result.getText?.();
-        if (code) lookup(code);
+  // RUTA B — @zxing EN VIVO (iOS Safari/Firefox, sin BarcodeDetector). CLAVE: zxing gestiona SU
+  // propio getUserMedia + <video> con decodeFromConstraints (espera loadedmetadata correctamente).
+  // Antes reusábamos nuestro stream con decodeFromVideoElement → el loop no arrancaba en iOS porque
+  // el evento de carga ya se había disparado. Hints EAN_13/EAN_8/UPC (producto mexicano = EAN-13).
+  const startZxingPath = async () => {
+    const video = videoRef.current;
+    if (!video) { setPhase('photo'); return; }
+    setStatus('Iniciando lector de código…');
+    const [{ BrowserMultiFormatReader }, { DecodeHintType, BarcodeFormat }] = await Promise.all([
+      import('@zxing/browser'),
+      import('@zxing/library'),
+    ]);
+    const hints = new Map();
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
+    ]);
+    hints.set(DecodeHintType.TRY_HARDER, true);
+    const reader = new BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 150 });
+    setPhase('scanning');
+    setStatus('Cámara activa · buscando código…');
+    zxingControlsRef.current = await reader.decodeFromConstraints(
+      { video: { facingMode: { ideal: 'environment' } } },
+      video,
+      (result) => {
+        if (result && !stoppedRef.current) {
+          const code = result.getText?.();
+          if (code) { setStatus('¡Código detectado!'); lookup(code); }
+        }
+        // err por frame sin código (NotFoundException) es normal → no hacer nada
       }
-    });
+    );
   };
 
   const startCamera = async () => {
@@ -130,30 +170,13 @@ export default function ScanView({ onDetected, onFallback, onUseMethod }) {
     setErrText('');
     if (!hasCamera) { setPhase('photo'); return; } // sin getUserMedia → foto/manual
     setPhase('init');
+    setStatus('Iniciando cámara…');
     try {
-      // Un solo getUserMedia para ambos motores (permiso + manejo de rechazo unificado).
-      // facingMode 'ideal' (no estricto): si no hay cámara trasera, no rechaza → usa la disponible.
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } });
-      if (stoppedRef.current) { stream.getTracks().forEach((t) => t.stop()); return; } // desmontado mientras pedía permiso
-      streamRef.current = stream;
-      const video = videoRef.current;
-      if (!video) { stopCamera(); setPhase('photo'); return; }
-      video.srcObject = stream;
-      video.setAttribute('playsinline', 'true'); // iOS: no ir a pantalla completa
-      await video.play().catch(() => {});
-      setPhase('scanning');
-
       const formats = hasDetector ? await detectorFormats() : null;
-      if (formats) runDetectorLoop(formats);
-      else await runZxingLoop(video); // iOS / sin BarcodeDetector usable
+      if (formats) await startDetectorPath(formats);
+      else await startZxingPath(); // iOS / sin BarcodeDetector usable → zxing en vivo
     } catch (err) {
-      // Rechazo de permiso → pantalla amable con reintento + foto/manual (nunca en blanco).
-      if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError' || err?.name === 'NotFoundError') {
-        setPhase('denied');
-      } else {
-        setErrText(String(err?.message || err));
-        setPhase('photo'); // cualquier otro fallo de cámara viva → foto/manual (también decodifica)
-      }
+      handleCamError(err);
     }
   };
 
@@ -230,6 +253,12 @@ export default function ScanView({ onDetected, onFallback, onUseMethod }) {
       <p className="c-subtitle" aria-live="polite" style={{ margin: 0, textAlign: 'center' }}>
         {phase === 'looking' ? 'Buscando el producto…' : 'Apunta al código de barras'}
       </p>
+      {/* Indicador EN PANTALLA del estado real del escáner (diagnóstico device-side). */}
+      {(status || errText) && (
+        <p aria-live="polite" style={{ margin: 0, textAlign: 'center', fontSize: 12, color: errText ? 'var(--warn-c)' : 'var(--text-3)' }}>
+          {errText ? `Escáner: ${errText}` : status}
+        </p>
+      )}
       <button type="button" className="btn btn-ghost" onClick={() => { stopCamera(); setPhase('photo'); }} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
         <Icon name="camera" size={16} /> Mejor tomar una foto del código
       </button>
