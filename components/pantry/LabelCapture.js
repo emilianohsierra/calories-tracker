@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import { downscaleImage } from '@/lib/image';
+import { normalizeNutricion, imageOf } from '@/lib/pantry/constants';
 
 // Foto de etiqueta → POST /api/pantry/label → campos extraídos EDITABLES (confianza 'ai').
 // 429 (cap agotado) → onPaywall. Sin soporte/errores → mensaje + reintento / otro método.
@@ -44,21 +45,15 @@ export default function LabelCapture({ onExtracted, onPaywall, onFallback }) {
         setPhase('error');
         return;
       }
-      const nut = l.nutricion || {};
       onExtracted({
         nombre: l.nombre || '',
         marca: l.marca || '',
         categoria: l.categoria || 'otros',
         unidad: l.unidad || 'g',
         cantidad: '',
-        nutricion: {
-          kcal: nut.kcal,
-          prot: nut.prot ?? nut.protein_g,
-          carb: nut.carb ?? nut.carbs_g,
-          gras: nut.gras ?? nut.fat_g,
-        },
+        nutricion: normalizeNutricion(l.nutricion || l), // fibra/azúcar/sodio/porción incluidos
         confianza: 'ai', // procedencia estimado_ia → badge estimado-IA en Confirmar
-        imagen: '',
+        imagen: imageOf(l), // foto del producto (OFF) si el match la trae
       });
     } catch {
       setPhase('error');

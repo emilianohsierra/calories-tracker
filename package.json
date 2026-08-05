@@ -13,6 +13,7 @@
     "@anthropic-ai/sdk": "^0.68.0",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.8",
+    "@zxing/browser": "^0.2.1",
     "next": "^15.3.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

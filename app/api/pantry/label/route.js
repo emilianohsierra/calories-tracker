@@ -11,6 +11,9 @@ export const maxDuration = 30;
 
 const MAX_BYTES = 8 * 1024 * 1024;
 const OK_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+// Reusa el bucket meal-photos (RLS: la 1a carpeta debe ser el uid) → subfolder pantry.
+const BUCKET = 'meal-photos';
 
 // rpc(...) es un thenable de PostgREST (sin .catch()). Envolver el reembolso.
 async function safeRpc(supabase, fn, args) {
@@ -90,9 +93,31 @@ export async function POST(request) {
     return NextResponse.json({ error: 'No pude leer la etiqueta. Intenta con una foto más clara y de frente.' }, { status: 422 });
   }
 
+  // 3b) Guardar la FOTO del usuario en Storage (reusa meal-photos; RLS: 1a carpeta = uid → sin
+  //     SQL nuevo). No bloquea: si la subida falla, seguimos con la nutrición y sin imagen.
+  //     Se guarda el PATH en `imagen` (el cliente lo reenvía en POST /api/pantry) y se firma una
+  //     URL mostrable (`image_url`) para la pantalla Confirmar.
+  let imagen = '';
+  let imageUrl = '';
+  try {
+    const ext = EXT[file.type] || 'jpg';
+    const path = `${user.id}/pantry/${crypto.randomUUID()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, buffer, { contentType: file.type, upsert: false });
+    if (upErr) {
+      console.error('pantry label upload:', upErr.message);
+    } else {
+      imagen = path;
+      const { data: signed } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600);
+      imageUrl = signed?.signedUrl || '';
+    }
+  } catch (e) {
+    console.error('pantry label upload EXCEPCION:', e?.message);
+  }
+
   // 4) Devolver en el shape del cliente (Rams): { product:{ nombre, marca, categoria, unidad,
-  //    nutricion:{...}, confianza:'ai' } }. Una etiqueta nutrimental da la NUTRICIÓN; nombre/
-  //    marca/categoría los completa la persona en Confirmar (el OCR no los trae fiables).
+  //    nutricion:{...}, confianza:'ai', imagen, image_url } }. Una etiqueta nutrimental da la
+  //    NUTRICIÓN (incluye azúcar y sodio); nombre/marca/categoría los completa la persona en
+  //    Confirmar (el OCR no los trae fiables). `image_url` = la foto que subió (mostrable ya).
   const product = {
     nombre: '',
     marca: '',
@@ -112,6 +137,8 @@ export async function POST(request) {
     },
     confianza: 'ai',
     confirmado: false,
+    imagen,          // PATH de storage → el cliente lo reenvía en POST /api/pantry
+    image_url: imageUrl, // URL firmada de la foto subida → mostrar en Confirmar
   };
   return NextResponse.json({ product, restantes: consumed.remaining ?? null });
   } catch (err) {

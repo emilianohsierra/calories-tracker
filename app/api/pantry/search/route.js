@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 // Prioridad de confianza para elegir la mejor fila nutricional del producto.
 const NIVEL_RANK = { verificado: 3, usuario: 2, estimado_ia: 1 };
 const NIVEL_TO_CONFIANZA = { verificado: 'verified', usuario: 'user', estimado_ia: 'ai' };
-const NUT_COLS = 'base_amount, base_unit, calories, protein_g, carbs_g, fat_g, fiber_g, allergens, nivel';
+const NUT_COLS = 'base_amount, base_unit, calories, protein_g, carbs_g, fat_g, fiber_g, azucar_g, sodium_mg, allergens, nivel';
 const PROD_SELECT = `id, name, off_id, image_url, brands(name), categories(name), product_nutrition(${NUT_COLS})`;
 
 // Mejor fila nutricional (por nivel de confianza).
@@ -27,6 +27,7 @@ function toCatalogResult(p) {
         base: esPorcion ? 'por_porcion' : 'por_100g',
         ...(esPorcion ? { porcion_g: Number(best.base_amount) } : {}),
         kcal: best.calories, prot: best.protein_g, carb: best.carbs_g, gras: best.fat_g, fibra: best.fiber_g,
+        azucar: best.azucar_g, sodio_mg: best.sodium_mg, // nutrición COMPLETA (Emiliano)
         procedencia: best.nivel || 'estimado_ia',
       }
     : null;
@@ -41,6 +42,7 @@ function toCatalogResult(p) {
     allergens: Array.isArray(best?.allergens) ? best.allergens : [],
     confianza: nut ? NIVEL_TO_CONFIANZA[nut.procedencia] || 'ai' : 'user',
     imagen: p.image_url || '',
+    image_url: p.image_url || '', // foto del producto (URL OFF, mostrable tal cual)
   };
 }
 
@@ -88,6 +90,7 @@ export async function GET(request) {
       allergens: Array.isArray(off.allergens) ? off.allergens : [],   // etiquetas estructuradas OFF
       confianza: 'verified',
       imagen: off.image_url || '',
+      image_url: off.image_url || '', // foto del producto OFF (URL mostrable tal cual)
     };
     return NextResponse.json({ found: true, product, source: 'open_food_facts', atribucion: 'Datos de Open Food Facts' });
   }

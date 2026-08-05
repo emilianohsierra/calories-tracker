@@ -1,18 +1,21 @@
 'use client';
 
 import { useState } from 'react';
+import Icon from '@/components/ui/Icon';
 import ConfidenceBadge from '@/components/pantry/ConfidenceBadge';
-import { CATEGORIES, UNITS } from '@/lib/pantry/constants';
+import { CATEGORIES, UNITS, imageOf } from '@/lib/pantry/constants';
 
-// Paso CONFIRMAR (obligatorio). Todos los campos editables antes de guardar.
-// Si el usuario edita un dato "verificado/estimado", su confianza baja a "tuyo" (honesto).
+// Paso CONFIRMAR (obligatorio). Foto del producto + todos los campos editables antes de
+// guardar. Si el usuario edita un dato "verificado/estimado", su confianza baja a "tuyo".
 export default function ConfirmProduct({ draft, onCancel, onSave, saving = false }) {
   const [form, setForm] = useState(() => ({
     nombre: '', marca: '', categoria: 'otros', cantidad: '', unidad: 'g', caduca_el: '',
-    nutricion: { kcal: '', prot: '', carb: '', gras: '' }, confianza: 'user', imagen: '',
+    nutricion: { kcal: '', prot: '', carb: '', gras: '', fibra: '', azucar: '', sodio: '', porcion: '' },
+    confianza: 'user', imagen: '',
     ...draft,
-    nutricion: { kcal: '', prot: '', carb: '', gras: '', ...(draft?.nutricion || {}) },
+    nutricion: { kcal: '', prot: '', carb: '', gras: '', fibra: '', azucar: '', sodio: '', porcion: '', ...(draft?.nutricion || {}) },
   }));
+  const productImg = imageOf(form);
 
   // Editar un campo baja la confianza a "user" si venía de catálogo/IA.
   const downgrade = (c) => (c === 'verified' || c === 'ai' ? 'user' : c);
@@ -34,12 +37,22 @@ export default function ConfirmProduct({ draft, onCancel, onSave, saving = false
         prot: numOrNull(form.nutricion.prot),
         carb: numOrNull(form.nutricion.carb),
         gras: numOrNull(form.nutricion.gras),
+        fibra: numOrNull(form.nutricion.fibra),
+        azucar: numOrNull(form.nutricion.azucar),
+        sodio: numOrNull(form.nutricion.sodio),
+        porcion: numOrNull(form.nutricion.porcion),
       },
     });
   };
 
   return (
     <div className="form-grid" style={{ marginTop: 'var(--s2)' }}>
+      {productImg && (
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={productImg} alt={form.nombre || 'Producto'} style={{ maxHeight: 140, maxWidth: '100%', objectFit: 'contain', borderRadius: 'var(--r-md)', border: '1px solid var(--border)', background: 'var(--surface-2)' }} />
+        </div>
+      )}
       <div className="field">
         <label htmlFor="cp-nombre">Nombre</label>
         <input id="cp-nombre" type="text" value={form.nombre} maxLength={80} onChange={(e) => set('nombre', e.target.value)} />
@@ -95,6 +108,26 @@ export default function ConfirmProduct({ draft, onCancel, onSave, saving = false
           <div className="field">
             <label htmlFor="cp-gras" style={{ color: 'var(--fat)' }}>Grasa</label>
             <input id="cp-gras" type="number" min="0" step="any" value={form.nutricion.gras} onChange={(e) => setNut('gras', e.target.value)} />
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="field">
+            <label htmlFor="cp-fibra" style={{ color: 'var(--fiber)' }}>Fibra (g)</label>
+            <input id="cp-fibra" type="number" min="0" step="any" value={form.nutricion.fibra} onChange={(e) => setNut('fibra', e.target.value)} />
+          </div>
+          <div className="field">
+            <label htmlFor="cp-azucar">Azúcar (g)</label>
+            <input id="cp-azucar" type="number" min="0" step="any" value={form.nutricion.azucar} onChange={(e) => setNut('azucar', e.target.value)} />
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="field">
+            <label htmlFor="cp-sodio">Sodio (mg)</label>
+            <input id="cp-sodio" type="number" min="0" step="any" value={form.nutricion.sodio} onChange={(e) => setNut('sodio', e.target.value)} />
+          </div>
+          <div className="field">
+            <label htmlFor="cp-porcion">Porción (g)</label>
+            <input id="cp-porcion" type="number" min="0" step="any" value={form.nutricion.porcion} onChange={(e) => setNut('porcion', e.target.value)} />
           </div>
         </div>
       </fieldset>

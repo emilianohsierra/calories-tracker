@@ -6,6 +6,7 @@ import QtyStepper from '@/components/pantry/QtyStepper';
 import ConfidenceBadge from '@/components/pantry/ConfidenceBadge';
 import ExpiryPill from '@/components/pantry/ExpiryPill';
 import ConfirmProduct from '@/components/pantry/ConfirmProduct';
+import { NUTRICION_FIELDS, imageOf } from '@/lib/pantry/constants';
 
 // Detalle de un producto: editar cantidad (+Agregar/−Consumir), caducidad, editar y eliminar.
 export default function PantryDetailSheet({ item, onClose, onUpdate, onDelete }) {
@@ -40,15 +41,17 @@ export default function PantryDetailSheet({ item, onClose, onUpdate, onDelete })
   };
 
   const n = item.nutricion || {};
+  const img = imageOf(item);
+  const porcion = n.porcion;
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <div className="modal" role="dialog" aria-modal="true" aria-label={`Detalle de ${item.nombre}`} style={{ maxWidth: 480 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--s3)', marginBottom: 'var(--s3)' }}>
-          <div style={{ width: 56, height: 56, borderRadius: 'var(--r-md)', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--text-3)' }}>
-            {item.imagen ? (
+          <div style={{ width: 64, height: 64, borderRadius: 'var(--r-md)', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--text-3)', overflow: 'hidden' }}>
+            {img ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={item.imagen} alt={item.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--r-md)' }} />
+              <img src={img} alt={item.nombre} style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 'var(--r-md)' }} />
             ) : <Icon name="utensils" size={24} />}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -92,11 +95,27 @@ export default function PantryDetailSheet({ item, onClose, onUpdate, onDelete })
                 <span style={{ marginTop: 6 }}><ExpiryPill date={caduca} showFar /></span>
               </div>
 
-              {n.kcal != null && (
-                <p className="num" style={{ margin: 0, color: 'var(--text-2)', fontSize: 13 }}>
-                  {Math.round(n.kcal)} kcal · P{Math.round(n.prot || 0)} · C{Math.round(n.carb || 0)} · G{Math.round(n.gras || 0)} <span style={{ color: 'var(--text-3)' }}>/100</span>
+              <div>
+                <p className="c-subtitle" style={{ margin: '0 0 var(--s2)' }}>
+                  Nutrición {porcion ? `por porción (${Math.round(porcion)} g)` : 'por 100 g/ml'}
                 </p>
-              )}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--s2) var(--s4)' }}>
+                  {NUTRICION_FIELDS.filter((f) => n[f.key] != null).map((f) => (
+                    <div key={f.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--s2)' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-2)' }}>
+                        <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: '50%', background: f.color }} />
+                        {f.label}
+                      </span>
+                      <span className="num" style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+                        {Math.round(n[f.key])} {f.unit}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {Object.keys(n).every((k) => n[k] == null) && (
+                  <p className="c-subtitle" style={{ margin: 0, color: 'var(--text-3)' }}>Sin datos de nutrición.</p>
+                )}
+              </div>
 
               <div><ConfidenceBadge level={item.confianza} /></div>
             </div>

@@ -1,11 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Icon from '@/components/ui/Icon';
+import { normalizeNutricion, imageOf } from '@/lib/pantry/constants';
 
-// Escanear código de barras. Approach: BarcodeDetector nativa (Android/Chrome) + fallback
-// a ENTRADA MANUAL del número (iOS/no soportado). Al leer → GET /api/pantry/search?code=
-// → precarga producto (confianza del catálogo) → onDetected(draft). onFallback → volver.
-// Nota: el decoder JS para iOS (p.ej. zxing) queda como follow-up con el CTO (dependencia).
+// Escanear código de barras. 3 vías, de mayor a menor soporte:
+//  - Cámara EN VIVO con BarcodeDetector nativa (Android/Chrome).
+//  - TOMAR FOTO del código → decodificar con @zxing (dynamic import, code-split) → sirve en iOS.
+//  - Entrada MANUAL del número (último recurso).
+// Al leer → GET /api/pantry/search?code= → precarga producto (confianza del catálogo).
 const FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39'];
 
 export default function ScanView({ onDetected, onFallback, onUseMethod }) {
@@ -13,7 +16,8 @@ export default function ScanView({ onDetected, onFallback, onUseMethod }) {
   const streamRef = useRef(null);
   const rafRef = useRef(0);
   const stoppedRef = useRef(false);
-  const [phase, setPhase] = useState('init'); // init | scanning | denied | unsupported | looking | notfound | error
+  const photoRef = useRef(null);
+  const [phase, setPhase] = useState('init'); // init | scanning | photo | denied | looking | notfound | error | nocode
   const [manual, setManual] = useState('');
   const [errText, setErrText] = useState('');
 
@@ -43,26 +47,44 @@ export default function ScanView({ onDetected, onFallback, onUseMethod }) {
           categoria: 'otros',
           unidad: 'g',
           cantidad: '',
-          nutricion: p.nutricion
-            ? { kcal: p.nutricion.kcal, prot: p.nutricion.prot, carb: p.nutricion.carb, gras: p.nutricion.gras }
-            : {},
+          nutricion: normalizeNutricion(p.nutricion), // kcal/P/C/G + fibra/azúcar/sodio/porción
           confianza: p.confianza || 'verified',
-          imagen: p.imagen || '',
+          imagen: imageOf(p), // foto del producto (OFF)
           codigo: code,
         });
         return;
       }
-      // Sin match → dejamos que lo agregue manual, con el código anotado.
-      setPhase('notfound');
+      setPhase('notfound'); // {found:false} → ofrecer etiqueta/manual
     } catch (e) {
       setErrText(String(e?.message || e));
       setPhase('error');
     }
   };
 
+  // Decodificar el código desde una FOTO (iOS y cualquier dispositivo) con @zxing.
+  const onPhotoPicked = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setPhase('looking');
+    setErrText('');
+    const url = URL.createObjectURL(file);
+    try {
+      const { BrowserMultiFormatReader } = await import('@zxing/browser'); // code-split
+      const reader = new BrowserMultiFormatReader();
+      const result = await reader.decodeFromImageUrl(url);
+      const code = result?.getText?.();
+      if (code) { lookup(code); return; }
+      setPhase('nocode');
+    } catch {
+      setPhase('nocode'); // no se detectó un código legible en la foto
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
+
   const startCamera = async () => {
-    if (!hasCamera) { setPhase('unsupported'); return; }
-    if (!hasDetector) { setPhase('unsupported'); return; } // sin decoder → entrada manual
+    if (!hasCamera || !hasDetector) { setPhase('photo'); return; } // sin cámara-viva → foto/manual
     stoppedRef.current = false;
     setPhase('init');
     try {
@@ -87,7 +109,7 @@ export default function ScanView({ onDetected, onFallback, onUseMethod }) {
       rafRef.current = requestAnimationFrame(tick);
     } catch (err) {
       if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError') setPhase('denied');
-      else { setErrText(String(err?.message || err)); setPhase('error'); }
+      else setPhase('photo'); // si la cámara viva falla, ofrecemos foto
     }
   };
 
@@ -102,39 +124,41 @@ export default function ScanView({ onDetected, onFallback, onUseMethod }) {
     if (code) lookup(code);
   };
 
-  // Bloque de entrada manual (fallback y "no soportado").
-  const ManualEntry = ({ title }) => (
+  const PhotoAndManual = ({ title }) => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s3)' }}>
-      <p className="c-subtitle" style={{ margin: 0 }}>{title}</p>
+      {title && <p className="c-subtitle" style={{ margin: 0 }}>{title}</p>}
+      <button type="button" className="btn btn-primary" onClick={() => photoRef.current?.click()} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+        <Icon name="camera" size={18} /> Tomar foto del código
+      </button>
       <div className="field">
-        <label htmlFor="scan-code">Código de barras</label>
+        <label htmlFor="scan-code">O escribe el código</label>
         <input id="scan-code" type="text" inputMode="numeric" value={manual} onChange={(e) => setManual(e.target.value)} placeholder="p. ej. 7501055310333" />
       </div>
-      <button type="button" className="btn btn-primary" onClick={submitManual} disabled={!manual.trim()}>Buscar código</button>
+      <button type="button" className="btn btn-ghost" onClick={submitManual} disabled={!manual.trim()}>Buscar código</button>
       <button type="button" className="link-btn" onClick={onFallback}>‹ Otro método</button>
+      <input ref={photoRef} type="file" accept="image/*" capture="environment" hidden onChange={onPhotoPicked} />
     </div>
   );
 
-  if (phase === 'unsupported') return <ManualEntry title="Tu dispositivo no puede escanear aquí. Escribe el código de barras:" />;
+  if (phase === 'photo') return <PhotoAndManual title="Toma una foto del código de barras o escríbelo:" />;
 
   if (phase === 'denied') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s3)' }}>
-        <p className="c-subtitle" role="alert" style={{ margin: 0 }}>
-          No diste permiso a la cámara. Actívalo en los ajustes del navegador, o escribe el código.
-        </p>
+        <p className="c-subtitle" role="alert" style={{ margin: 0 }}>No diste permiso a la cámara. Puedes reintentar, tomar una foto del código o escribirlo.</p>
         <button type="button" className="btn btn-ghost" onClick={startCamera}>Reintentar cámara</button>
-        <ManualEntry title="O escribe el código de barras:" />
+        <PhotoAndManual />
       </div>
     );
   }
 
-  if (phase === 'error') {
+  if (phase === 'error' || phase === 'nocode') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s3)' }}>
-        <p className="c-subtitle" role="alert" style={{ margin: 0 }}>No pude leer el código. Inténtalo de nuevo.</p>
-        <button type="button" className="btn btn-ghost" onClick={startCamera}>Reintentar</button>
-        <button type="button" className="link-btn" onClick={onFallback}>‹ Otro método</button>
+        <p className="c-subtitle" role="alert" style={{ margin: 0 }}>
+          {phase === 'nocode' ? 'No detecté un código en la foto. Acércate y que quede enfocado.' : 'No pude leer el código. Inténtalo de nuevo.'}
+        </p>
+        <PhotoAndManual />
       </div>
     );
   }
@@ -143,28 +167,28 @@ export default function ScanView({ onDetected, onFallback, onUseMethod }) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s3)' }}>
         <p className="c-subtitle" style={{ margin: 0 }}>No encontré ese producto en el catálogo. Prueba con la etiqueta o agrégalo a mano.</p>
-        {onUseMethod && (
-          <button type="button" className="btn btn-primary" onClick={() => onUseMethod('photo')}>Foto de etiqueta</button>
-        )}
+        {onUseMethod && <button type="button" className="btn btn-primary" onClick={() => onUseMethod('photo')}>Foto de etiqueta</button>}
         <button type="button" className="btn btn-ghost" onClick={() => onDetected({ confianza: 'user', codigo: manual })}>Agregar manual</button>
-        <button type="button" className="link-btn" onClick={() => { setPhase('init'); startCamera(); }}>Escanear otro</button>
+        <button type="button" className="link-btn" onClick={() => setPhase('photo')}>Escanear otro</button>
         <button type="button" className="link-btn" onClick={onFallback}>‹ Otro método</button>
       </div>
     );
   }
 
-  // scanning / init / looking → preview con guía de encuadre
+  // scanning / init / looking → preview de cámara viva con guía + opción de foto
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s3)' }}>
       <div style={{ position: 'relative', width: '100%', aspectRatio: '4 / 3', borderRadius: 'var(--r-md)', overflow: 'hidden', background: 'var(--surface-2)' }}>
         <video ref={videoRef} muted playsInline aria-label="Vista de la cámara para escanear" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        {/* Guía de encuadre */}
         <div aria-hidden="true" style={{ position: 'absolute', inset: '22% 12%', border: '2px solid var(--brand)', borderRadius: 'var(--r-md)', boxShadow: '0 0 0 100vmax rgba(0,0,0,0.28)' }} />
         <div aria-hidden="true" style={{ position: 'absolute', left: '12%', right: '12%', top: '50%', height: 2, background: 'var(--brand)', opacity: 0.9 }} />
       </div>
       <p className="c-subtitle" aria-live="polite" style={{ margin: 0, textAlign: 'center' }}>
         {phase === 'looking' ? 'Buscando el producto…' : 'Apunta al código de barras'}
       </p>
+      <button type="button" className="btn btn-ghost" onClick={() => { stopCamera(); setPhase('photo'); }} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+        <Icon name="camera" size={16} /> Mejor tomar una foto del código
+      </button>
       <button type="button" className="link-btn" onClick={onFallback}>‹ Otro método</button>
     </div>
   );

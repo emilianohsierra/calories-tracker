@@ -3,11 +3,13 @@
 import Icon from '@/components/ui/Icon';
 import ConfidenceBadge from '@/components/pantry/ConfidenceBadge';
 import ExpiryPill from '@/components/pantry/ExpiryPill';
+import { imageOf } from '@/lib/pantry/constants';
 
 // Card de producto (no fila de tabla): imagen + nombre + marca + cantidad + badge de
 // confianza + nutrición básica + caducidad. Tap → detalle.
 export default function PantryCard({ item, onOpen }) {
-  const { nombre, marca, cantidad, unidad, nutricion, confianza, caduca_el, imagen } = item;
+  const { nombre, marca, cantidad, unidad, nutricion, confianza, caduca_el } = item;
+  const imagen = imageOf(item);
 
   return (
     <button

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { getDefaultPantry, readItems, toClientItem } from '@/lib/pantry/db';
+import { getDefaultPantry, readItems, toClientItem, firmarImagen } from '@/lib/pantry/db';
 import { cantidadValida } from '@/lib/pantry/text';
 
 export const runtime = 'nodejs';
@@ -71,5 +71,7 @@ export async function POST(request) {
     console.error('pantry POST:', error.message);
     return NextResponse.json({ error: 'No se pudo agregar a la despensa' }, { status: 500 });
   }
-  return NextResponse.json({ item: toClientItem(data) }, { status: 201 });
+  const item = toClientItem(data);
+  item.image_url = await firmarImagen(supabase, data.imagen); // path de storage → URL firmada
+  return NextResponse.json({ item }, { status: 201 });
 }
