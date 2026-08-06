@@ -2,6 +2,7 @@
 
 import Icon from '@/components/ui/Icon';
 import ConfidenceBadge from '@/components/pantry/ConfidenceBadge';
+import ProductNomInfo from '@/components/pantry/ProductNomInfo';
 import { NUTRICION_FIELDS, imageOf } from '@/lib/pantry/constants';
 import { isNutritionIncomplete } from '@/lib/pantry/productSearch';
 
@@ -80,6 +81,9 @@ export default function ProductResultCard({ product, variant = 'full', onAdd, on
           <span className="c-subtitle" style={{ margin: 0 }}>No inventamos valores. Complétala para registrarla bien.</span>
         </div>
       )}
+
+      {/* Fase 5: sellos NOM-051 + ingredientes + aditivos (renderiza null si no hay datos). */}
+      <ProductNomInfo product={product} />
 
       <div className="c-card__actions" style={{ flexWrap: 'wrap' }}>
         {incompleta ? (

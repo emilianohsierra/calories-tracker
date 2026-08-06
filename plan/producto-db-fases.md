@@ -151,3 +151,6 @@ Fase 3 ✅ (base viva)
 - **Umbrales NOM-051** para `nom051.js` — [Ada] (sin ellos el módulo no se activa).
 - **`product_additives.nivel_riesgo`** — sólo si hay **fuente libre** de clasificación — [Ada]; si no, se omite (no inventar riesgo).
 - Licencia de imágenes de fuentes ≠ OFF antes de enlazarlas — [Ada].
+
+## Backlog (no bloqueante)
+- **L2 (Slowking, gate NOM-051):** la negación a nivel token puede **sub-marcar** casos como "azúcar sin refinar" (el token contiene `sin` → se descarta aunque el azúcar sea real). Dirección segura (nunca sobre-marca). Refinamiento futuro: distinguir "sin \<nutriente\> añadido/a" (negación real) de "\<algo\> sin refinar/sin \<otra cosa\>". No bloquea Fase 5.
