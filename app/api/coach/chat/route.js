@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { assembleContext } from '@/lib/coach/context';
 import { registrarComidaFoto, registrarTexto, actualizarContextoDia, generarCena, cambiarObjetivo, guardarMemoria, agregarAListaCompras, sugerirSustitucion } from '@/lib/coach/actions';
+import { intentListaCompras } from '@/lib/coach/intent';
 import { limitPayload } from '@/lib/paywall';
 import { nextResetLabel } from '@/lib/usage';
 
@@ -60,7 +61,7 @@ const GENERAR_CENA_TOOL = {
 const LISTA_COMPRAS_TOOL = {
   name: 'agregar_a_lista_compras',
   description:
-    'Propone agregar productos a la lista de compras. Úsala cuando la persona lo pida ("agrégalo a mi lista", "anota que necesito X") o cuando note que un producto de su despensa está agotado. NO inventes cantidades: si la persona no la dice, se usa 1. Deja `items` vacío para auto-proponer los agotados de la despensa.',
+    'Agrega productos a la lista de compras del usuario. LLÁMALA SIEMPRE que la persona pida anotar/agregar/comprar algo, aunque sea un solo producto y aunque no tengas más contexto. Disparadores: "anota que necesito X", "apúntame X", "apunta X", "agrégame X a la lista", "añade X a mi súper/lista", "necesito comprar X", "recuérdame comprar X", "pon X en la lista". Cada producto va en `items` como texto libre (p.ej. {"texto":"leche"}); no hace falta que exista en el catálogo. NO inventes cantidades: si la persona no la dice, se usa 1. Deja `items` vacío SOLO para auto-proponer los agotados de la despensa. NO respondas con un consejo genérico: primero agrega a la lista.',
   input_schema: {
     type: 'object',
     additionalProperties: false,
@@ -302,6 +303,14 @@ const OUTPUT_RULES = `\n\n# CÓMO RESPONDES (formato de salida)
 - bloques = 0 a 3 tarjetas de soporte. Usa SOLO números reales del <contexto_dia> o las metas del motor; nunca los inventes.
 - Primero el dato (titular), luego una acción. Sin párrafos largos ni frases de ánimo vacías.`;
 
+// Guía de ACCIONES: mapea la intención de la persona a la tool correcta. Sin esto, un modelo chico
+// (Haiku) tiende a ir directo a \`responder\` con un consejo genérico y NO ejecuta la acción pedida.
+const ACTIONS_GUIDE = `\n\n# ACCIONES (ejecuta la herramienta correcta ANTES de \`responder\` cuando la persona lo pida)
+- LISTA DE COMPRAS → \`agregar_a_lista_compras\`: si pide anotar/agregar/comprar algo ("anota que necesito leche", "apúntame X", "agrégame X a la lista", "necesito comprar X", "pon X en el súper"). Pasa el producto como texto libre en \`items\`. NO respondas con un consejo genérico: PRIMERO agrega a la lista.
+- SUSTITUCIÓN → \`sugerir_sustitucion\`: si pregunta por una mejor opción ("¿con qué sustituyo X?", "¿hay algo mejor que X?", "una opción más sana que X").
+- QUÉ COMER → \`generar_cena\`. REGISTRAR comida (texto/foto) → \`registrar_texto\`/foto. Estado del día (agua/sueño/entreno) → \`actualizar_contexto_dia\`. Recordar un gusto/preferencia → \`save_memory\`. Cambiar objetivo → \`cambiar_plan\`.
+- Reglas: elige la acción por lo que PIDE la persona (no por el contexto del día). Si NINGUNA acción aplica, responde directo con \`responder\`. Tras ejecutar una acción, cierra el turno con \`responder\`.`;
+
 // Validación §4.2 (motor manda): forma segura de la respuesta antes de pintar.
 // - Recorta bloques a 3. - En nutrition recomputa pendiente = objetivo − consumido (≥0).
 // - Garantiza titular/accion presentes. Nunca deja pasar formas inválidas al cliente.
@@ -441,7 +450,12 @@ export async function POST(request) {
     // pendiente. tool_choice auto (el modelo decide). El chat charla = 1 vuelta (responder).
     const baseTools = [REGISTRAR_TEXTO_TOOL, ACTUALIZAR_TOOL, GENERAR_CENA_TOOL, CAMBIAR_PLAN_TOOL, SAVE_MEMORY_TOOL, LISTA_COMPRAS_TOOL, SUGERIR_SUSTITUCION_TOOL, RESPONDER_TOOL];
     let tools = pendingAnalysis ? [REGISTRAR_FOTO_TOOL, ...baseTools] : baseTools;
-    let choice = { type: 'auto' };
+    // Cinturón determinista (bugfix Fase 7): si el mensaje pide CLARAMENTE anotar/comprar algo,
+    // FORZAMOS la tool de lista (Haiku a veces no la elige y cae a un consejo genérico). Excepto si
+    // hay una foto pendiente (esa tiene prioridad). El modelo extrae el/los ítems del mensaje.
+    let choice = !pendingAnalysis && intentListaCompras(message)
+      ? { type: 'tool', name: 'agregar_a_lista_compras' }
+      : { type: 'auto' };
     let convo = apiMessages;
     let responderInput = null;
     let guardado = null; // foto registrada
@@ -459,7 +473,7 @@ export async function POST(request) {
       lastResp = await anthropic.messages.create({
         model: COACH_MODEL,
         max_tokens: MAX_TOKENS,
-        system: `${system}${OUTPUT_RULES}`,
+        system: `${system}${OUTPUT_RULES}${ACTIONS_GUIDE}`,
         tools,
         tool_choice: choice,
         messages: convo,
