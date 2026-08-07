@@ -4,7 +4,8 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { assembleContext } from '@/lib/coach/context';
 import { registrarComidaFoto, registrarTexto, actualizarContextoDia, generarCena, cambiarObjetivo, guardarMemoria, agregarAListaCompras, sugerirSustitucion } from '@/lib/coach/actions';
-import { intentListaCompras } from '@/lib/coach/intent';
+import { intentListaCompras, extraerItemsLista } from '@/lib/coach/intent';
+import { escribirLista } from '@/lib/pantry/shopping';
 import { limitPayload } from '@/lib/paywall';
 import { nextResetLabel } from '@/lib/usage';
 
@@ -429,6 +430,41 @@ export async function POST(request) {
     await supabase.from('coach_messages').insert({ conversation_id: conv.id, user_id: user.id, role: 'user', content: message });
 
     const { system, contextoDia, history, ctx } = await assembleContext(supabase, user.id, conv.id);
+
+    // ── BUGFIX Fase 7 (short-circuit DETERMINISTA, sin modelo) ──────────────────────────────────
+    // "Anota que necesito leche" → extrae el ítem, lo FILTRA por alérgenos (agregarAListaCompras) y
+    // lo ESCRIBE en la lista, sin depender de que Haiku elija la tool (el forzado no bastó en prod).
+    // Es una acción sin IA → se REEMBOLSA el turno del coach (queda Free). Guarda el turno en historial.
+    if (!pendingAnalysis && intentListaCompras(message)) {
+      const textos = extraerItemsLista(message);
+      if (textos.length) {
+        const exec = await agregarAListaCompras({ input: { items: textos.map((t) => ({ texto: t })) }, ctx });
+        const propuesta = exec.listaCompras || [];
+        if (propuesta.length) {
+          const escritos = await escribirLista(supabase, user.id, propuesta);
+          const nombres = escritos.map((x) => x.texto).filter(Boolean).join(', ');
+          const bloqueados = textos.length - propuesta.length; // filtrados por alérgeno
+          const titular = escritos.length
+            ? `Listo, agregué ${nombres} a tu lista de compras.${bloqueados > 0 ? ' (Omití lo que está en tus alergias.)' : ''}`
+            : 'No pude agregarlo a la lista. Intenta de nuevo.';
+          const response = { titular, bloques: [], accion: { label: escritos.length ? 'Ver mi lista' : '', accion: escritos.length ? 'lista_super' : 'ninguna', ref: '' } };
+          await supabase.from('coach_messages').insert({ conversation_id: conv.id, user_id: user.id, role: 'assistant', content: JSON.stringify(response) });
+          // Acción determinista sin IA → reembolsar el turno reservado (queda Free).
+          await safeRpc(supabase, 'reembolsar_ia', { p_request_id: requestId });
+          requestId = null;
+          return NextResponse.json({ response, listaEscrita: escritos, coachRemaining: null });
+        }
+        // propuesta vacía = TODO filtrado por alérgeno → avisar honesto (sin escribir).
+        if (textos.length) {
+          const response = { titular: 'No lo agregué: eso está en tus alergias declaradas.', bloques: [], accion: { label: '', accion: 'ninguna', ref: '' } };
+          await supabase.from('coach_messages').insert({ conversation_id: conv.id, user_id: user.id, role: 'assistant', content: JSON.stringify(response) });
+          await safeRpc(supabase, 'reembolsar_ia', { p_request_id: requestId });
+          requestId = null;
+          return NextResponse.json({ response, coachRemaining: null });
+        }
+      }
+    }
+
     const apiMessages = history.map((m) => ({ role: m.role, content: m.content }));
     // Nota volátil de análisis pendiente (va con el turno del usuario, tras la caché).
     const analisisNota = pendingAnalysis
