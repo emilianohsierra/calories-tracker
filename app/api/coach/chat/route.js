@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { assembleContext } from '@/lib/coach/context';
-import { registrarComidaFoto, registrarTexto, actualizarContextoDia, generarCena, cambiarObjetivo, guardarMemoria } from '@/lib/coach/actions';
+import { registrarComidaFoto, registrarTexto, actualizarContextoDia, generarCena, cambiarObjetivo, guardarMemoria, agregarAListaCompras, sugerirSustitucion } from '@/lib/coach/actions';
 import { limitPayload } from '@/lib/paywall';
 import { nextResetLabel } from '@/lib/usage';
 
@@ -50,6 +50,53 @@ const GENERAR_CENA_TOOL = {
       n_opciones: { type: 'integer', enum: [1, 2, 3] },
       usar_favoritos: { type: 'boolean' },
       ingredientes_disponibles: { type: 'array', items: { type: 'string' } },
+    },
+  },
+};
+
+// Tool `agregar_a_lista_compras` (Fase 7, última tool): PROPONE agregar productos a la lista de
+// compras cuando la persona lo pide o hay agotados en la despensa. Números/cantidades del MOTOR
+// (no inventados). PROPONE → confirma → aplica (la escritura real es el endpoint CRUD, Free).
+const LISTA_COMPRAS_TOOL = {
+  name: 'agregar_a_lista_compras',
+  description:
+    'Propone agregar productos a la lista de compras. Úsala cuando la persona lo pida ("agrégalo a mi lista", "anota que necesito X") o cuando note que un producto de su despensa está agotado. NO inventes cantidades: si la persona no la dice, se usa 1. Deja `items` vacío para auto-proponer los agotados de la despensa.',
+  input_schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        description: 'Productos a proponer. Vacío = auto-detectar agotados de la despensa.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['texto'],
+          properties: {
+            texto: { type: 'string' },
+            cantidad: { type: 'number' },
+            unidad: { type: 'string' },
+          },
+        },
+      },
+    },
+  },
+};
+
+// Tool `sugerir_sustitucion` (Fase 7): alternativas MEJORES y SEGURAS a un producto (con sellos de
+// EXCESO / peor nutri-score / ausente). Los datos salen de sustituir() (motor puro + safety.js →
+// SOLO SEGURO, nunca un alérgeno); el modelo solo redacta. PROPONE (no escribe).
+const SUGERIR_SUSTITUCION_TOOL = {
+  name: 'sugerir_sustitucion',
+  description:
+    'Sugiere alternativas MEJORES y seguras a un producto (sobre todo si tiene sellos de EXCESO o peor nutri-score). Úsala cuando la persona pregunte "¿hay algo mejor que X?", "¿con qué sustituyo X?" o quiera una opción más sana. Deja `producto` vacío para revisar lo peor de su despensa. NO inventes datos: si no hay mejor+segura, dilo honesto.',
+  input_schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['producto'],
+    properties: {
+      producto: { type: 'string', description: 'Nombre del producto a sustituir. "" = auto (lo peor de la despensa).' },
     },
   },
 };
@@ -392,7 +439,7 @@ export async function POST(request) {
     const anthropic = new Anthropic({ apiKey });
     // registrar_texto disponible en todo turno; registrar_comida_foto solo con foto
     // pendiente. tool_choice auto (el modelo decide). El chat charla = 1 vuelta (responder).
-    const baseTools = [REGISTRAR_TEXTO_TOOL, ACTUALIZAR_TOOL, GENERAR_CENA_TOOL, CAMBIAR_PLAN_TOOL, SAVE_MEMORY_TOOL, RESPONDER_TOOL];
+    const baseTools = [REGISTRAR_TEXTO_TOOL, ACTUALIZAR_TOOL, GENERAR_CENA_TOOL, CAMBIAR_PLAN_TOOL, SAVE_MEMORY_TOOL, LISTA_COMPRAS_TOOL, SUGERIR_SUSTITUCION_TOOL, RESPONDER_TOOL];
     let tools = pendingAnalysis ? [REGISTRAR_FOTO_TOOL, ...baseTools] : baseTools;
     let choice = { type: 'auto' };
     let convo = apiMessages;
@@ -403,6 +450,8 @@ export async function POST(request) {
     let opciones = null; // opciones de generar_cena (propuestas, sin escribir)
     let planChange = null; // propuesta de cambio de objetivo (sin escribir)
     let memoria = null; // hecho guardado en memoria
+    let listaCompras = null; // propuesta para la lista de compras (sin escribir; se aplica al confirmar)
+    let sustituciones = null; // alternativas propuestas (sin escribir)
     let lastResp = null;
 
     for (let step = 0; step < MAX_STEPS; step++) {
@@ -419,14 +468,16 @@ export async function POST(request) {
       const toolUses = blocks.filter((b) => b.type === 'tool_use');
 
       // Una sola acción por turno (foto tiene prioridad si hay análisis pendiente).
-      const canAct = !guardado && !estimate && !actualizado && !opciones && !planChange && !memoria;
+      const canAct = !guardado && !estimate && !actualizado && !opciones && !planChange && !memoria && !listaCompras && !sustituciones;
       const fotoAction = canAct && pendingAnalysis ? toolUses.find((b) => b.name === 'registrar_comida_foto') : null;
       const textoAction = canAct && !fotoAction ? toolUses.find((b) => b.name === 'registrar_texto') : null;
       const cenaAction = canAct && !fotoAction && !textoAction ? toolUses.find((b) => b.name === 'generar_cena') : null;
       const planAction = canAct && !fotoAction && !textoAction && !cenaAction ? toolUses.find((b) => b.name === 'cambiar_plan') : null;
       const ctxAction = canAct && !fotoAction && !textoAction && !cenaAction && !planAction ? toolUses.find((b) => b.name === 'actualizar_contexto_dia') : null;
       const memAction = canAct && !fotoAction && !textoAction && !cenaAction && !planAction && !ctxAction ? toolUses.find((b) => b.name === 'save_memory') : null;
-      const action = fotoAction || textoAction || cenaAction || planAction || ctxAction || memAction;
+      const listaAction = canAct && !fotoAction && !textoAction && !cenaAction && !planAction && !ctxAction && !memAction ? toolUses.find((b) => b.name === 'agregar_a_lista_compras') : null;
+      const sustAction = canAct && !fotoAction && !textoAction && !cenaAction && !planAction && !ctxAction && !memAction && !listaAction ? toolUses.find((b) => b.name === 'sugerir_sustitucion') : null;
+      const action = fotoAction || textoAction || cenaAction || planAction || ctxAction || memAction || listaAction || sustAction;
       if (action) {
         let exec;
         if (fotoAction) {
@@ -444,9 +495,15 @@ export async function POST(request) {
         } else if (ctxAction) {
           exec = await actualizarContextoDia({ supabase, userId: user.id, input: action.input || {} });
           if (exec.estado) actualizado = exec.estado;
-        } else {
+        } else if (memAction) {
           exec = await guardarMemoria({ supabase, userId: user.id, input: action.input || {} });
           if (exec.memoria) memoria = exec.memoria;
+        } else if (listaAction) {
+          exec = await agregarAListaCompras({ input: action.input || {}, ctx });
+          if (exec.listaCompras) listaCompras = exec.listaCompras;
+        } else {
+          exec = sugerirSustitucion({ input: action.input || {}, ctx });
+          if (exec.sustituciones) sustituciones = exec.sustituciones;
         }
         // Solo se devuelve tool_result para ESTA tool_use (se descartan otras del turno
         // para no dejar tool_use sin respuesta → evita 400 en la vuelta siguiente).
@@ -535,6 +592,19 @@ export async function POST(request) {
     // Memoria guardada sin cierre de responder → confirmación mínima.
     if ((!response || !response.titular) && memoria) {
       response = { titular: `Lo recordaré: ${memoria.contenido}.`, bloques: [], accion: { label: '', accion: 'ninguna', ref: '' } };
+    }
+    // Propuesta de lista de compras (números del motor): titular + botón para confirmar/agregar.
+    if ((!response || !response.titular) && listaCompras) {
+      const nombres = listaCompras.slice(0, 3).map((x) => x.texto).filter(Boolean).join(', ');
+      response = { titular: `¿Agrego a tu lista de compras: ${nombres}?`, bloques: [], accion: { label: 'Agregar a la lista', accion: 'lista_super', ref: '' } };
+    }
+    // Sustituciones (datos del motor + safety): tarjetas recommendation (nombre + razón grounded).
+    if ((!response || !response.titular) && sustituciones && sustituciones.length) {
+      response = {
+        titular: 'Mejores alternativas de tu despensa:',
+        bloques: sustituciones.slice(0, 3).map((a) => ({ tipo: 'recommendation', texto: a.nombre, motivo: a.razon })),
+        accion: { label: '', accion: 'ninguna', ref: '' },
+      };
     }
 
     if (!response || !response.titular) {
