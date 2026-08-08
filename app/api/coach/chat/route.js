@@ -504,7 +504,7 @@ export async function POST(request) {
     let opciones = null; // opciones de generar_cena (propuestas, sin escribir)
     let planChange = null; // propuesta de cambio de objetivo (sin escribir)
     let memoria = null; // hecho guardado en memoria
-    let listaCompras = null; // propuesta para la lista de compras (sin escribir; se aplica al confirmar)
+    let listaCompras = null; // ítems ESCRITOS en la lista por el path tool-loop (B3: se persiste antes de navegar)
     let sustituciones = null; // alternativas propuestas (sin escribir)
     let lastResp = null;
 
@@ -553,8 +553,16 @@ export async function POST(request) {
           exec = await guardarMemoria({ supabase, userId: user.id, input: action.input || {} });
           if (exec.memoria) memoria = exec.memoria;
         } else if (listaAction) {
+          // B3 (Nielsen): el path del tool-loop TAMBIÉN escribe (belt de alérgeno dentro de
+          // agregarAListaCompras), consistente con el short-circuit. Nunca navegar a /lista con una
+          // propuesta SIN persistir (antes se perdía y la lista quedaba vacía).
           exec = await agregarAListaCompras({ input: action.input || {}, ctx });
-          if (exec.listaCompras) listaCompras = exec.listaCompras;
+          const propuesta = exec.listaCompras || [];
+          if (propuesta.length) {
+            const escritos = await escribirLista(supabase, user.id, propuesta);
+            if (escritos.length) listaCompras = escritos; // ya ESCRITO (no solo propuesto)
+            exec.toolResult = { ...exec.toolResult, escrito: escritos.length };
+          }
         } else {
           exec = sugerirSustitucion({ input: action.input || {}, ctx });
           if (exec.sustituciones) sustituciones = exec.sustituciones;
@@ -649,8 +657,9 @@ export async function POST(request) {
     }
     // Propuesta de lista de compras (números del motor): titular + botón para confirmar/agregar.
     if ((!response || !response.titular) && listaCompras) {
+      // Ya está ESCRITO (B3): el titular lo confirma y el botón navega a la lista real.
       const nombres = listaCompras.slice(0, 3).map((x) => x.texto).filter(Boolean).join(', ');
-      response = { titular: `¿Agrego a tu lista de compras: ${nombres}?`, bloques: [], accion: { label: 'Agregar a la lista', accion: 'lista_super', ref: '' } };
+      response = { titular: `Listo, agregué ${nombres} a tu lista de compras.`, bloques: [], accion: { label: 'Ver mi lista', accion: 'lista_super', ref: '' } };
     }
     // Sustituciones (datos del motor + safety): tarjetas recommendation (nombre + razón grounded).
     if ((!response || !response.titular) && sustituciones && sustituciones.length) {

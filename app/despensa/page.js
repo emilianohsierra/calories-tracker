@@ -29,10 +29,11 @@ export default function DespensaPage() {
       const data = await getPantry();
       setItems(data);
       setStatus('ready');
-    } catch {
-      setStatus('error');
+    } catch (e) {
+      if (e?.code === 'unauthorized') { router.push('/login'); return; }
+      setStatus('error'); // estado de error REAL (antes era código muerto por el seed que nunca fallaba)
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -62,22 +63,41 @@ export default function DespensaPage() {
     [items]
   );
 
+  // Error de datos: sesión expirada → login; otro → aviso + recarga real (sin pérdida silenciosa).
+  const handleDataError = (e) => {
+    if (e?.code === 'unauthorized') { router.push('/login'); return; }
+    setToast('No se pudo guardar. Revisa tu conexión.');
+    load(); // re-sincroniza con el servidor (revierte cualquier cambio optimista)
+  };
+
   const onAdd = async (item) => {
-    const saved = await addProduct(item);
-    setItems((cur) => [saved, ...cur]);
-    setToast('Agregado a tu despensa');
+    try {
+      const saved = await addProduct(item);
+      setItems((cur) => [saved, ...cur]);
+      setToast('Agregado a tu despensa');
+    } catch (e) {
+      handleDataError(e);
+    }
   };
 
   const onUpdate = async (id, patch) => {
     setItems((cur) => cur.map((it) => (it.id === id ? { ...it, ...patch } : it)));
     setSelected((s) => (s && s.id === id ? { ...s, ...patch } : s));
-    await updateItem(id, patch);
+    try {
+      await updateItem(id, patch);
+    } catch (e) {
+      handleDataError(e);
+    }
   };
 
   const onDelete = async (id) => {
     setItems((cur) => cur.filter((it) => it.id !== id));
-    await deleteItem(id);
-    setToast('Producto eliminado');
+    try {
+      await deleteItem(id);
+      setToast('Producto eliminado');
+    } catch (e) {
+      handleDataError(e);
+    }
   };
 
   return (

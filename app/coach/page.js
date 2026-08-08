@@ -215,6 +215,7 @@ export default function CoachPage() {
   const onAccion = (accion, prompt) => {
     if (accion?.accion === 'cambiar_plan') return router.push('/perfil');
     if (accion?.accion === 'lista_super') return router.push('/lista'); // "Ver mi lista" → pantalla de lista
+    if (accion?.accion === 'registrar_foto') return fileRef.current?.click(); // abre cámara/galería (flujo Analizar comida)
     if (prompt) send(prompt);
   };
 
