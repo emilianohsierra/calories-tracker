@@ -65,7 +65,7 @@ export async function POST(request) {
   };
   const { data, error } = await supabase.from('shopping_list_items').insert(row).select('*').single();
   if (error) {
-    console.error('shopping-list POST:', error.message);
+    console.error('shopping-list POST:', { code: error.code, details: error.details, message: error.message }); // Item 10: code/details, no solo message
     return NextResponse.json({ error: 'No se pudo agregar a la lista' }, { status: 500 });
   }
   return NextResponse.json({ item: toClientListItem(data) }, { status: 201 });

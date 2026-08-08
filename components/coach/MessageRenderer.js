@@ -32,9 +32,10 @@ const MD_COMPONENTS = {
 const ACCION_PROMPT = {
   generar_cena: '¿Qué puedo cenar hoy?',
   lista_super: 'Arma mi lista del súper para esta semana.',
-  actualizar_agua: 'Registra un vaso de agua.',
+  actualizar_agua: 'Registra 1 vaso de agua (250 ml).', // Item 5: cantidad explícita, no vago
   ver_progreso: '¿Cómo voy esta semana?',
-  registrar_texto: 'Quiero registrar una comida.',
+  // Item 5: NO se auto-envía; precarga el composer para que el usuario escriba qué y cuánto (ver onAccion).
+  registrar_texto: 'Registra mi comida: ',
   cambiar_plan: 'Quiero cambiar mi plan.',
 };
 

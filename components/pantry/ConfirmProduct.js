@@ -7,7 +7,7 @@ import { CATEGORIES, UNITS, imageOf } from '@/lib/pantry/constants';
 
 // Paso CONFIRMAR (obligatorio). Foto del producto + todos los campos editables antes de
 // guardar. Si el usuario edita un dato "verificado/estimado", su confianza baja a "tuyo".
-export default function ConfirmProduct({ draft, onCancel, onSave, saving = false }) {
+export default function ConfirmProduct({ draft, onCancel, onSave, saving = false, codigoReadOnly = false }) {
   const [form, setForm] = useState(() => ({
     nombre: '', marca: '', categoria: 'otros', cantidad: '', unidad: 'g', caduca_el: '', codigo: '',
     nutricion: { kcal: '', prot: '', carb: '', gras: '', fibra: '', azucar: '', sodio: '', porcion: '' },
@@ -32,15 +32,18 @@ export default function ConfirmProduct({ draft, onCancel, onSave, saving = false
   const set = (key, val) => setForm((f) => ({ ...f, [key]: val, confianza: downgrade(f.confianza) }));
   const setNut = (key, val) => setForm((f) => ({ ...f, nutricion: { ...f.nutricion, [key]: val }, confianza: downgrade(f.confianza) }));
 
-  const valid = form.nombre.trim() && Number(form.cantidad) > 0;
+  // Item 1: cantidad OPCIONAL (no fricciona el match auto). Solo el nombre es obligatorio; si no dan
+  // cantidad, default sensato = 1.
+  const valid = !!form.nombre.trim();
 
   const save = () => {
     if (!valid || saving) return;
+    const cant = Number(form.cantidad);
     onSave({
       ...form,
       nombre: form.nombre.trim(),
       marca: form.marca.trim(),
-      cantidad: Number(form.cantidad),
+      cantidad: Number.isFinite(cant) && cant > 0 ? cant : 1,
       caduca_el: form.caduca_el || null,
       nutricion: {
         kcal: numOrNull(form.nutricion.kcal),
@@ -79,8 +82,19 @@ export default function ConfirmProduct({ draft, onCancel, onSave, saving = false
           <input id="cp-marca" type="text" value={form.marca} maxLength={60} onChange={(e) => set('marca', e.target.value)} />
         </div>
         <div className="field">
-          <label htmlFor="cp-codigo">Código de barras (opcional)</label>
-          <input id="cp-codigo" type="text" inputMode="numeric" value={form.codigo || ''} maxLength={32} onChange={(e) => set('codigo', e.target.value)} />
+          {/* Item 4: en edición el código NO se persiste en el ítem (es del producto vinculado) → read-only claro. */}
+          <label htmlFor="cp-codigo">Código de barras{codigoReadOnly ? '' : ' (opcional)'}</label>
+          <input
+            id="cp-codigo"
+            type="text"
+            inputMode="numeric"
+            value={form.codigo || ''}
+            maxLength={32}
+            readOnly={codigoReadOnly}
+            aria-readonly={codigoReadOnly || undefined}
+            onChange={codigoReadOnly ? undefined : (e) => set('codigo', e.target.value)}
+            style={codigoReadOnly ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
+          />
         </div>
       </div>
       <div className="form-row">

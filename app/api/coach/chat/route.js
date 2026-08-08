@@ -435,6 +435,15 @@ export async function POST(request) {
     //  · "anota que necesito leche" (item puntual) → extrae, filtra alérgenos y ESCRIBE.
     //  · "arma mi lista del súper"  (armar)         → AUTO: agotados de la despensa (motor) y ESCRIBE.
     // NUNCA un briefing genérico. Acción sin IA → REEMBOLSA el turno (Free) + guarda en historial.
+    //
+    // DECISIÓN DE DISEÑO (Item 11 del backlog QA): el fast-path ESCRIBE de una vez en vez de
+    // proponer-y-confirmar. Es intencional y seguro:
+    //   1) El cinturón de alérgenos vive DENTRO (agregarAListaCompras → filtra antes de escribir),
+    //      así que nunca se anota algo inseguro para el usuario.
+    //   2) La lista de compras es reversible con un tap (quitar en /lista), a diferencia de registrar
+    //      una comida o cambiar el plan — el costo de un error es ~0.
+    //   3) Menos fricción: "anota leche" pone leche, no abre un diálogo de confirmación.
+    // Si algún día la acción dejara de ser trivialmente reversible, revertir a proponer-confirmar.
     const quiereArmar = !pendingAnalysis && intentArmarLista(message) && !intentListaCompras(message);
     const quiereAnotar = !pendingAnalysis && intentListaCompras(message);
     if (quiereArmar || quiereAnotar) {

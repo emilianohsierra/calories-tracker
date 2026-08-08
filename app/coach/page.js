@@ -208,10 +208,17 @@ export default function CoachPage() {
   };
 
   // Acción de una tarjeta (Karpathy): navegar o re-preguntar al coach.
+  // Item 6: los chips triviales (navegar/ver/adjuntar/precargar) retornan ANTES de send() → NO gastan
+  // turno Free. Solo las acciones que son interacción real de coach (generar_cena, ver_progreso,
+  // actualizar_agua) llaman send(); de esas, las deterministas sin IA se reembolsan server-side
+  // (reembolsar_ia), así que el cap Free solo se consume cuando de verdad corre el modelo.
   const onAccion = (accion, prompt) => {
     if (accion?.accion === 'cambiar_plan') return router.push('/perfil');
     if (accion?.accion === 'lista_super') return router.push('/lista?from=coach'); // vuelve al coach con el back (N-I3)
     if (accion?.accion === 'registrar_foto') return fileRef.current?.click(); // abre cámara/galería (flujo Analizar comida)
+    // Item 5: registrar_texto precarga el composer (el usuario teclea qué y cuánto) en vez de enviar
+    // un mensaje sin datos que solo gastaría un turno y obligaría a la ida-y-vuelta.
+    if (accion?.accion === 'registrar_texto') { setInput(prompt || ''); return; }
     if (prompt) send(prompt);
   };
 

@@ -43,7 +43,7 @@ export async function PATCH(request, { params }) {
     .select('*')
     .single();
   if (error) {
-    console.error('shopping-list PATCH:', error.message);
+    console.error('shopping-list PATCH:', { code: error.code, details: error.details, message: error.message }); // Item 10: code/details, no solo message
     return NextResponse.json({ error: 'No se pudo actualizar' }, { status: 500 });
   }
   return NextResponse.json({ item: toClientListItem(data) });

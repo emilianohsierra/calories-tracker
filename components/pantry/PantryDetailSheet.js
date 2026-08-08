@@ -14,6 +14,7 @@ export default function PantryDetailSheet({ item, onClose, onUpdate, onDelete })
   const [caduca, setCaduca] = useState(item.caduca_el || '');
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false); // Item 3: deshabilita Guardar mientras persiste (anti doble-envío)
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -66,8 +67,20 @@ export default function PantryDetailSheet({ item, onClose, onUpdate, onDelete })
         {editing ? (
           <ConfirmProduct
             draft={{ ...item, cantidad: qty }}
+            saving={savingEdit}
+            codigoReadOnly
             onCancel={() => setEditing(false)}
-            onSave={(patch) => { onUpdate(item.id, patch); setEditing(false); }}
+            onSave={async (patch) => {
+              // Item 4: el código de barras no vive en el ítem (es del producto vinculado) → no lo mandamos.
+              const { codigo, ...rest } = patch;
+              setSavingEdit(true);
+              try {
+                await onUpdate(item.id, rest);
+                setEditing(false);
+              } finally {
+                setSavingEdit(false);
+              }
+            }}
           />
         ) : (
           <>

@@ -79,13 +79,16 @@ export default function ListaPage() {
 
   const Row = ({ it }) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s3)', padding: 'var(--s3)', borderRadius: 'var(--r-md)', background: 'var(--surface)', border: '1px solid var(--border)' }}>
+      {/* Item 8: área táctil ≥44px (el glifo visual sigue en 24px, centrado dentro del hit-area). */}
       <button
         type="button"
         onClick={() => toggle(it)}
         aria-label={it.comprado ? 'Marcar como pendiente' : 'Marcar como comprado'}
-        style={{ width: 24, height: 24, flexShrink: 0, borderRadius: 6, border: `2px solid ${it.comprado ? 'var(--ok)' : 'var(--border)'}`, background: it.comprado ? 'var(--ok)' : 'transparent', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+        style={{ width: 44, height: 44, flexShrink: 0, margin: '-10px 0', border: 'none', background: 'none', padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
       >
-        {it.comprado ? <Icon name="check" size={14} /> : null}
+        <span aria-hidden="true" style={{ width: 24, height: 24, borderRadius: 6, border: `2px solid ${it.comprado ? 'var(--ok)' : 'var(--border)'}`, background: it.comprado ? 'var(--ok)' : 'transparent', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+          {it.comprado ? <Icon name="check" size={14} /> : null}
+        </span>
       </button>
       <span style={{ flex: 1, minWidth: 0, color: 'var(--text)', textDecoration: it.comprado ? 'line-through' : 'none', opacity: it.comprado ? 0.55 : 1 }}>
         {it.texto || 'Producto'}
@@ -93,7 +96,7 @@ export default function ListaPage() {
           <span className="c-subtitle" style={{ marginLeft: 6 }}>{Number(it.cantidad)}{it.unidad ? ` ${it.unidad}` : ''}</span>
         ) : null}
       </span>
-      <button type="button" onClick={() => quitar(it)} aria-label="Quitar" className="link-btn" style={{ color: 'var(--text-3)', display: 'inline-flex' }}>
+      <button type="button" onClick={() => quitar(it)} aria-label="Quitar" className="link-btn" style={{ color: 'var(--text-3)', width: 44, height: 44, margin: '-10px -10px -10px 0', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         <Icon name="trash" size={16} />
       </button>
     </div>

@@ -69,7 +69,7 @@ export async function PATCH(request, { params }) {
     .eq('id', id).eq('user_id', user.id)
     .select('*').single();
   if (error) {
-    console.error('pantry PATCH:', error.message);
+    console.error('pantry PATCH:', { code: error.code, details: error.details, message: error.message }); // Item 10: code/details, no solo message
     return NextResponse.json({ error: 'No se pudo actualizar' }, { status: 500 });
   }
   const item = toClientItem(data);

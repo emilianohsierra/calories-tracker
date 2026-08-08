@@ -68,7 +68,7 @@ export async function POST(request) {
     .select('*')
     .single();
   if (error) {
-    console.error('pantry POST:', error.message);
+    console.error('pantry POST:', { code: error.code, details: error.details, message: error.message }); // Item 10: code/details, no solo message
     return NextResponse.json({ error: 'No se pudo agregar a la despensa' }, { status: 500 });
   }
   const item = toClientItem(data);
