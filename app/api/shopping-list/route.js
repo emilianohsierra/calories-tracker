@@ -36,9 +36,12 @@ export async function POST(request) {
   if (!product_id && !texto) {
     return NextResponse.json({ error: 'Agrega un producto o un texto' }, { status: 400 });
   }
-  const cantidad = body?.cantidad == null ? null : cantidadValida(body.cantidad);
-  if (body?.cantidad != null && cantidad === null) {
-    return NextResponse.json({ error: 'Cantidad inválida' }, { status: 400 });
+  // cantidad/unidad son NOT NULL en el esquema (default 1 / 'pieza'): un null explícito rompe el
+  // insert → coercionamos al default cuando no vienen.
+  let cantidad = 1;
+  if (body?.cantidad != null) {
+    cantidad = cantidadValida(body.cantidad);
+    if (cantidad === null) return NextResponse.json({ error: 'Cantidad inválida' }, { status: 400 });
   }
   const origen = ORIGENES.includes(body?.origen) ? body.origen : 'manual';
 
@@ -56,7 +59,7 @@ export async function POST(request) {
     product_id,
     texto_libre: texto,
     cantidad,
-    unidad: body?.unidad ? String(body.unidad).slice(0, 20) : null,
+    unidad: body?.unidad ? String(body.unidad).slice(0, 20) : 'pieza', // NOT NULL default 'pieza'
     marcado: false,
     origen,
   };

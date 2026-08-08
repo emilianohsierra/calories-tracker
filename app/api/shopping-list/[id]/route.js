@@ -23,9 +23,10 @@ export async function PATCH(request, { params }) {
   const patch = {};
   if (body?.comprado !== undefined) patch.marcado = !!body.comprado;
   if (body?.texto !== undefined) patch.texto_libre = body.texto ? String(body.texto).trim().slice(0, 120) : null;
-  if (body?.unidad !== undefined) patch.unidad = body.unidad ? String(body.unidad).slice(0, 20) : null;
+  // unidad/cantidad son NOT NULL (default 'pieza'/1): null explícito rompe el update → coercionar.
+  if (body?.unidad !== undefined) patch.unidad = body.unidad ? String(body.unidad).slice(0, 20) : 'pieza';
   if (body?.cantidad !== undefined) {
-    if (body.cantidad === null) patch.cantidad = null;
+    if (body.cantidad == null) patch.cantidad = 1;
     else {
       const c = cantidadValida(body.cantidad);
       if (c === null) return NextResponse.json({ error: 'Cantidad inválida' }, { status: 400 });
