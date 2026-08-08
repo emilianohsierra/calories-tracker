@@ -79,7 +79,7 @@ export default function LabelCapture({ onExtracted, onPaywall, onFallback }) {
       <button type="button" className="btn btn-primary" onClick={() => fileRef.current?.click()} disabled={phase === 'reading'} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
         <Icon name="camera" size={18} /> {phase === 'reading' ? 'Procesando…' : 'Tomar foto de la etiqueta'}
       </button>
-      <button type="button" className="link-btn" onClick={onFallback} disabled={phase === 'reading'}>‹ Otro método</button>
+      <button type="button" className="link-btn" onClick={onFallback} disabled={phase === 'reading'} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="chevronLeft" size={14} /> Otro método</button>
 
       <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={onPick} />
     </div>

@@ -17,6 +17,7 @@ const PATHS = {
   message: '<path d="M21 11.5a8.4 8.4 0 0 1-9 8.4L3 21l1.1-3.3A8.4 8.4 0 1 1 21 11.5Z"/>',
   clipboard: '<rect x="8" y="3" width="8" height="4" rx="1"/><path d="M9 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3"/>',
   chevronLeft: '<path d="m15 18-6-6 6-6"/>',
+  chevronRight: '<path d="m9 18 6-6-6-6"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   close: '<path d="M18 6 6 18M6 6l12 12"/>',
   arrowUp: '<path d="M12 19V5M5 12l7-7 7 7"/>',

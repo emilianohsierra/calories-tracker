@@ -57,8 +57,8 @@ export default function OptionCard({ option, onRegister }) {
 
       {onRegister && (
         <div className="c-card__actions">
-          <button type="button" className="btn btn-primary" onClick={register} disabled={state !== 'idle'}>
-            {state === 'saving' ? 'Registrando…' : state === 'done' ? 'Registrado ✓' : 'Registrar'}
+          <button type="button" className="btn btn-primary" onClick={register} disabled={state !== 'idle'} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            {state === 'saving' ? 'Registrando…' : state === 'done' ? <><Icon name="check" size={15} /> Registrado</> : 'Registrar'}
           </button>
         </div>
       )}

@@ -7,6 +7,7 @@ import PersonalityPicker from '@/components/coach/PersonalityPicker';
 import MessageRenderer from '@/components/coach/MessageRenderer';
 import MealCard from '@/components/coach/cards/MealCard';
 import OptionCard from '@/components/pantry/OptionCard';
+import Icon from '@/components/ui/Icon';
 import PlanDiff from '@/components/PlanDiff';
 import ThemeToggle from '@/components/ThemeToggle';
 import CoachOrb from '@/components/coach/CoachOrb';
@@ -336,7 +337,7 @@ export default function CoachPage() {
     <main className="coach-shell">
       <header className="coach-header">
         <div className="coach-brand">
-          <button type="button" className="link-btn" onClick={() => router.push('/')} aria-label="Inicio">‹</button>
+          <button type="button" className="link-btn" onClick={() => router.push('/')} aria-label="Inicio" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 'var(--touch)', minHeight: 'var(--touch)' }}><Icon name="chevronLeft" size={20} /></button>
           <CoachOrb size={26} />
           <span className="coach-title">Mi Coach</span>
         </div>
@@ -405,7 +406,7 @@ export default function CoachPage() {
                     </div>
                   </div>
                 )}
-                {m.planApplied && <span className="ring-caption">Plan actualizado ✓</span>}
+                {m.planApplied && <span className="ring-caption" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={13} /> Plan actualizado</span>}
               </>
             ) : busy && i === messages.length - 1 ? (
               <TypingIndicator />

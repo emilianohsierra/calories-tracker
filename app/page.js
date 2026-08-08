@@ -214,19 +214,19 @@ export default function Home() {
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               <Icon name="message" size={18} /> Habla con Mi Coach
             </span>
-            <span aria-hidden="true">›</span>
+            <span aria-hidden="true" style={{ display: 'inline-flex', color: 'var(--text-3)' }}><Icon name="chevronRight" size={18} /></span>
           </button>
           <button type="button" className="coach-entry" onClick={() => router.push('/despensa')} style={{ marginTop: 'calc(-1 * var(--s2))' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               <Icon name="box" size={18} /> Mi despensa
             </span>
-            <span aria-hidden="true">›</span>
+            <span aria-hidden="true" style={{ display: 'inline-flex', color: 'var(--text-3)' }}><Icon name="chevronRight" size={18} /></span>
           </button>
           <button type="button" className="coach-entry" onClick={() => router.push('/lista')} style={{ marginTop: 'calc(-1 * var(--s2))' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               <Icon name="clipboard" size={18} /> Mi lista de compras
             </span>
-            <span aria-hidden="true">›</span>
+            <span aria-hidden="true" style={{ display: 'inline-flex', color: 'var(--text-3)' }}><Icon name="chevronRight" size={18} /></span>
           </button>
           <div style={{ textAlign: 'right', margin: '-8px 0 var(--s3)' }}>
             <button type="button" className="link-btn" onClick={() => router.push('/perfil')}>
@@ -246,8 +246,8 @@ export default function Home() {
       )}
 
       <nav className="date-nav" aria-label="Cambiar día">
-        <button type="button" className="nav-btn" aria-label="Día anterior" onClick={() => setDate(addDays(date, -1))}>
-          ‹
+        <button type="button" className="nav-btn" aria-label="Día anterior" onClick={() => setDate(addDays(date, -1))} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="chevronLeft" size={18} />
         </button>
         <span className="date-label">{dateLabel(date)}</span>
         <button
@@ -256,8 +256,9 @@ export default function Home() {
           aria-label="Día siguiente"
           disabled={date >= today}
           onClick={() => setDate(addDays(date, 1))}
+          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
         >
-          ›
+          <Icon name="chevronRight" size={18} />
         </button>
       </nav>
 

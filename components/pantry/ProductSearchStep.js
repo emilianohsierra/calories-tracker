@@ -73,7 +73,7 @@ export default function ProductSearchStep({ onPick, onUseMethod, onBack }) {
 
       {phase === 'result' && result?.match === 'miss' && miss}
 
-      <button type="button" className="link-btn" onClick={onBack}>‹ Otro método</button>
+      <button type="button" className="link-btn" onClick={onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="chevronLeft" size={14} /> Otro método</button>
     </div>
   );
 }

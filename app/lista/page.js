@@ -105,7 +105,7 @@ export default function ListaPage() {
   return (
     <div style={{ maxWidth: 640, margin: '0 auto', padding: 'var(--s4)', display: 'flex', flexDirection: 'column', gap: 'var(--s4)' }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--s2)' }}>
-        <button type="button" className="link-btn" onClick={() => router.push(backHref)} aria-label="Volver" style={{ fontSize: 22, lineHeight: 1 }}>‹</button>
+        <button type="button" className="link-btn" onClick={() => router.push(backHref)} aria-label="Volver" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 'var(--touch)', minHeight: 'var(--touch)' }}><Icon name="chevronLeft" size={20} /></button>
         <h1 className="c-title" style={{ margin: 0 }}>Lista de compras</h1>
       </header>
 

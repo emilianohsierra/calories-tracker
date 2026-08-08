@@ -204,7 +204,7 @@ export default function ScanView({ onDetected, onFallback, onUseMethod }) {
         <input id="scan-code" type="text" inputMode="numeric" value={manual} onChange={(e) => setManual(e.target.value)} placeholder="p. ej. 7501055310333" />
       </div>
       <button type="button" className="btn btn-ghost" onClick={submitManual} disabled={!manual.trim()}>Buscar código</button>
-      <button type="button" className="link-btn" onClick={onFallback}>‹ Otro método</button>
+      <button type="button" className="link-btn" onClick={onFallback} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="chevronLeft" size={14} /> Otro método</button>
       <input ref={photoRef} type="file" accept="image/*" capture="environment" hidden onChange={onPhotoPicked} />
     </div>
   );
@@ -241,7 +241,7 @@ export default function ScanView({ onDetected, onFallback, onUseMethod }) {
         {onUseMethod && <button type="button" className="btn btn-primary" onClick={() => onUseMethod('photo', { codigo: lastCode || manual, confianza: 'user' })}>Foto de etiqueta</button>}
         <button type="button" className="btn btn-ghost" onClick={() => onDetected({ confianza: 'user', codigo: lastCode || manual })}>Agregar manual</button>
         <button type="button" className="link-btn" onClick={() => setPhase('photo')}>Escanear otro</button>
-        <button type="button" className="link-btn" onClick={onFallback}>‹ Otro método</button>
+        <button type="button" className="link-btn" onClick={onFallback} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="chevronLeft" size={14} /> Otro método</button>
       </div>
     );
   }
@@ -266,7 +266,7 @@ export default function ScanView({ onDetected, onFallback, onUseMethod }) {
       <button type="button" className="btn btn-ghost" onClick={() => { stopCamera(); setPhase('photo'); }} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
         <Icon name="camera" size={16} /> Mejor tomar una foto del código
       </button>
-      <button type="button" className="link-btn" onClick={onFallback}>‹ Otro método</button>
+      <button type="button" className="link-btn" onClick={onFallback} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="chevronLeft" size={14} /> Otro método</button>
     </div>
   );
 }
