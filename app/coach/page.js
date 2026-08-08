@@ -214,6 +214,7 @@ export default function CoachPage() {
   // Acción de una tarjeta (Karpathy): navegar o re-preguntar al coach.
   const onAccion = (accion, prompt) => {
     if (accion?.accion === 'cambiar_plan') return router.push('/perfil');
+    if (accion?.accion === 'lista_super') return router.push('/lista'); // "Ver mi lista" → pantalla de lista
     if (prompt) send(prompt);
   };
 

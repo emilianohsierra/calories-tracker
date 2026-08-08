@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { assembleContext } from '@/lib/coach/context';
 import { registrarComidaFoto, registrarTexto, actualizarContextoDia, generarCena, cambiarObjetivo, guardarMemoria, agregarAListaCompras, sugerirSustitucion } from '@/lib/coach/actions';
-import { intentListaCompras, extraerItemsLista } from '@/lib/coach/intent';
+import { intentListaCompras, intentArmarLista, extraerItemsLista } from '@/lib/coach/intent';
 import { escribirLista } from '@/lib/pantry/shopping';
 import { limitPayload } from '@/lib/paywall';
 import { nextResetLabel } from '@/lib/usage';
@@ -431,37 +431,41 @@ export async function POST(request) {
 
     const { system, contextoDia, history, ctx } = await assembleContext(supabase, user.id, conv.id);
 
-    // ── BUGFIX Fase 7 (short-circuit DETERMINISTA, sin modelo) ──────────────────────────────────
-    // "Anota que necesito leche" → extrae el ítem, lo FILTRA por alérgenos (agregarAListaCompras) y
-    // lo ESCRIBE en la lista, sin depender de que Haiku elija la tool (el forzado no bastó en prod).
-    // Es una acción sin IA → se REEMBOLSA el turno del coach (queda Free). Guarda el turno en historial.
-    if (!pendingAnalysis && intentListaCompras(message)) {
-      const textos = extraerItemsLista(message);
-      if (textos.length) {
-        const exec = await agregarAListaCompras({ input: { items: textos.map((t) => ({ texto: t })) }, ctx });
+    // ── Fase 7 · short-circuit DETERMINISTA de lista (sin modelo; Haiku no es fiable eligiendo tool) ─
+    //  · "anota que necesito leche" (item puntual) → extrae, filtra alérgenos y ESCRIBE.
+    //  · "arma mi lista del súper"  (armar)         → AUTO: agotados de la despensa (motor) y ESCRIBE.
+    // NUNCA un briefing genérico. Acción sin IA → REEMBOLSA el turno (Free) + guarda en historial.
+    const quiereArmar = !pendingAnalysis && intentArmarLista(message) && !intentListaCompras(message);
+    const quiereAnotar = !pendingAnalysis && intentListaCompras(message);
+    if (quiereArmar || quiereAnotar) {
+      const responder = async (response, extra = {}) => {
+        await supabase.from('coach_messages').insert({ conversation_id: conv.id, user_id: user.id, role: 'assistant', content: JSON.stringify(response) });
+        await safeRpc(supabase, 'reembolsar_ia', { p_request_id: requestId }); // sin IA → Free
+        requestId = null;
+        return NextResponse.json({ response, coachRemaining: null, ...extra });
+      };
+      // AUTO (agotados) para "armar"; extracción del texto para "anotar".
+      const input = quiereArmar ? { items: [] } : { items: extraerItemsLista(message).map((t) => ({ texto: t })) };
+      const puedeProceder = quiereArmar || input.items.length; // "anota" sin ítem claro → cae al tool-loop
+      if (puedeProceder) {
+        const exec = await agregarAListaCompras({ input, ctx }); // filtra alérgenos (belt)
         const propuesta = exec.listaCompras || [];
         if (propuesta.length) {
           const escritos = await escribirLista(supabase, user.id, propuesta);
           const nombres = escritos.map((x) => x.texto).filter(Boolean).join(', ');
-          const bloqueados = textos.length - propuesta.length; // filtrados por alérgeno
-          const titular = escritos.length
-            ? `Listo, agregué ${nombres} a tu lista de compras.${bloqueados > 0 ? ' (Omití lo que está en tus alergias.)' : ''}`
-            : 'No pude agregarlo a la lista. Intenta de nuevo.';
-          const response = { titular, bloques: [], accion: { label: escritos.length ? 'Ver mi lista' : '', accion: escritos.length ? 'lista_super' : 'ninguna', ref: '' } };
-          await supabase.from('coach_messages').insert({ conversation_id: conv.id, user_id: user.id, role: 'assistant', content: JSON.stringify(response) });
-          // Acción determinista sin IA → reembolsar el turno reservado (queda Free).
-          await safeRpc(supabase, 'reembolsar_ia', { p_request_id: requestId });
-          requestId = null;
-          return NextResponse.json({ response, listaEscrita: escritos, coachRemaining: null });
+          if (escritos.length) {
+            const titular = quiereArmar
+              ? `Armé tu lista con lo que tienes agotado: ${nombres}. Puedes agregar más cuando quieras.`
+              : `Listo, agregué ${nombres} a tu lista de compras.`;
+            return responder({ titular, bloques: [], accion: { label: 'Ver mi lista', accion: 'lista_super', ref: '' } }, { listaEscrita: escritos });
+          }
+          return responder({ titular: 'No pude agregarlo a la lista. Intenta de nuevo.', bloques: [], accion: { label: '', accion: 'ninguna', ref: '' } });
         }
-        // propuesta vacía = TODO filtrado por alérgeno → avisar honesto (sin escribir).
-        if (textos.length) {
-          const response = { titular: 'No lo agregué: eso está en tus alergias declaradas.', bloques: [], accion: { label: '', accion: 'ninguna', ref: '' } };
-          await supabase.from('coach_messages').insert({ conversation_id: conv.id, user_id: user.id, role: 'assistant', content: JSON.stringify(response) });
-          await safeRpc(supabase, 'reembolsar_ia', { p_request_id: requestId });
-          requestId = null;
-          return NextResponse.json({ response, coachRemaining: null });
-        }
+        // Sin propuesta → honesto, NUNCA briefing.
+        const titular = quiereArmar
+          ? 'No veo productos agotados en tu despensa para armar la lista. Dime qué necesitas y lo anoto.'
+          : 'No lo agregué: eso está en tus alergias declaradas.';
+        return responder({ titular, bloques: [], accion: { label: quiereArmar ? 'Ver mi lista' : '', accion: quiereArmar ? 'lista_super' : 'ninguna', ref: '' } });
       }
     }
 
