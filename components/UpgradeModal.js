@@ -106,8 +106,8 @@ const LIMIT_COPY = {
         Ya usaste tus <span className="num">{n}</span> análisis con IA de este mes
       </>
     ),
-    body: 'Puedes seguir registrando a mano gratis e ilimitado, o pásate a Pro para analizar con IA sin contar.',
-    manual: 'Seguir con registro manual',
+    body: 'Puedes seguir agregando a mano gratis e ilimitado, o pásate a Pro para leer etiquetas y analizar con IA sin contar.',
+    manual: 'Agregar a mano',
     icon: 'pencil',
   },
   coach_chat: {

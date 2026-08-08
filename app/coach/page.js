@@ -132,54 +132,50 @@ export default function CoachPage() {
     runChat(text, analysis);
   };
 
-  const retry = () => {
-    if (busy) return;
-    const lastUser = [...messages].reverse().find((x) => x.role === 'user');
-    if (!lastUser) return;
-    setLastBubble({ content: '' }); // vuelve la última burbuja a "cargando"
-    runChat(lastUser.content);
-  };
-
   // "¿Qué puedo comer?" — endpoint DEDICADO (no chat) para poder disparar el paywall:
-  // 200 → <=3 Opciones (forma que consume OptionCard). 429 → UpgradeModal (limit, despensa_reco).
-  const requestQuePuedoComer = async () => {
-    if (busy) return;
-    setMessages((m) => [...m, { role: 'user', content: '¿Qué puedo comer?' }, { role: 'assistant', content: '' }]);
+  // 200 → <=3 Opciones (OptionCard). 429 → UpgradeModal. Despensa vacía → estado ÚTIL (no error).
+  // doReco RE-usa la última burbuja (para el Reintentar del MISMO endpoint, N-I2).
+  const doReco = async () => {
     setBusy(true);
     try {
-      const res = await fetch('/api/coach/que-puedo-comer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const res = await fetch('/api/coach/que-puedo-comer', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
       const data = await res.json().catch(() => ({}));
-      // 429 (cap Free agotado) → muro con el payload dedicado del endpoint.
       if (res.status === 429) {
-        setMessages((m) => m.slice(0, -1)); // quita la burbuja vacía del coach
-        setPaywall({
-          variant: data.variant || 'limit',
-          feature: data.feature || 'despensa_reco',
-          usage: data.usage || null,
-        });
+        setMessages((m) => m.slice(0, -1));
+        setPaywall({ variant: data.variant || 'limit', feature: data.feature || 'despensa_reco', usage: data.usage || null });
         return;
       }
       const pw = readPaywall(res.status, data);
-      if (pw) {
-        setMessages((m) => m.slice(0, -1));
-        setPaywall(pw);
-        return;
-      }
+      if (pw) { setMessages((m) => m.slice(0, -1)); setPaywall(pw); return; }
       const opciones = data.opciones || data.options || [];
-      if (!res.ok || opciones.length === 0) {
-        setLastBubble({ error: true, diag: data.error || 'sin opciones' });
+      if (res.ok && opciones.length === 0) {
+        // N-I2: despensa vacía / nada seguro cuadra → mensaje ÚTIL + CTA a agregar, NO un error falso.
+        setLastBubble({ empty: true, mensaje: data.mensaje || 'Con lo que tienes no encontré algo seguro que cuadre. Agrega productos a tu despensa.' });
         return;
       }
+      if (!res.ok) { setLastBubble({ error: true, retryReco: true, diag: data.error || 'sin opciones' }); return; }
       setLastBubble({ options: opciones });
     } catch (e) {
       console.error('que-puedo-comer fail:', e);
-      setLastBubble({ error: true, diag: String(e?.message || e) });
+      setLastBubble({ error: true, retryReco: true, diag: String(e?.message || e) });
     } finally {
       setBusy(false);
     }
+  };
+
+  const requestQuePuedoComer = () => {
+    if (busy) return;
+    setMessages((m) => [...m, { role: 'user', content: '¿Qué puedo comer?' }, { role: 'assistant', content: '' }]);
+    doReco();
+  };
+
+  const retry = () => {
+    if (busy) return;
+    const lastAssistant = [...messages].reverse().find((x) => x.role === 'assistant');
+    setLastBubble({ content: '' }); // vuelve la última burbuja a "cargando"
+    if (lastAssistant?.retryReco) { doReco(); return; } // N-I2: Reintentar el MISMO endpoint (reco), no el chat
+    const lastUser = [...messages].reverse().find((x) => x.role === 'user');
+    if (lastUser) runChat(lastUser.content);
   };
 
   // "Registrar" de una Opción de la despensa: registra la comida y manda los items
@@ -214,7 +210,7 @@ export default function CoachPage() {
   // Acción de una tarjeta (Karpathy): navegar o re-preguntar al coach.
   const onAccion = (accion, prompt) => {
     if (accion?.accion === 'cambiar_plan') return router.push('/perfil');
-    if (accion?.accion === 'lista_super') return router.push('/lista'); // "Ver mi lista" → pantalla de lista
+    if (accion?.accion === 'lista_super') return router.push('/lista?from=coach'); // vuelve al coach con el back (N-I3)
     if (accion?.accion === 'registrar_foto') return fileRef.current?.click(); // abre cámara/galería (flujo Analizar comida)
     if (prompt) send(prompt);
   };
@@ -360,6 +356,13 @@ export default function CoachPage() {
                 {m.options.map((op, k) => (
                   <OptionCard key={k} option={op} onRegister={m.fromHistory ? undefined : onRegisterOption} />
                 ))}
+              </div>
+            ) : m.empty ? (
+              <div className="coach-msg">
+                <div className="coach-titular">{m.mensaje}</div>
+                <div className="c-card__actions">
+                  <button type="button" className="btn btn-primary" onClick={() => router.push('/despensa')}>Agregar a mi despensa</button>
+                </div>
               </div>
             ) : m.proposal ? (
               <div className="coach-msg">

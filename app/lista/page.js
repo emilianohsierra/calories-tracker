@@ -11,6 +11,17 @@ export default function ListaPage() {
   const [status, setStatus] = useState('loading'); // loading | ready | error
   const [nuevo, setNuevo] = useState('');
   const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState('');
+  const [backHref, setBackHref] = useState('/'); // N-I3: respeta el origen (coach → volver al coach)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('from') === 'coach') setBackHref('/coach');
+  }, []);
+  useEffect(() => {
+    if (!toast) return undefined;
+    const t = setTimeout(() => setToast(''), 2600);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const load = useCallback(async () => {
     setStatus('loading');
@@ -26,6 +37,7 @@ export default function ListaPage() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  // N-I8: los fallos (409 lista llena / 500) ya NO son silenciosos → aviso + revertir optimista.
   const agregar = async () => {
     const texto = nuevo.trim();
     if (!texto || busy) return;
@@ -37,7 +49,10 @@ export default function ListaPage() {
         body: JSON.stringify({ texto, origen: 'manual' }),
       });
       const d = await res.json().catch(() => ({}));
-      if (d.item) { setItems((x) => [...x, d.item]); setNuevo(''); }
+      if (res.ok && d.item) { setItems((x) => [...x, d.item]); setNuevo(''); }
+      else setToast(d.error || 'No se pudo agregar. Intenta de nuevo.');
+    } catch {
+      setToast('No se pudo agregar. Revisa tu conexión.');
     } finally {
       setBusy(false);
     }
@@ -46,15 +61,17 @@ export default function ListaPage() {
   const toggle = async (it) => {
     setItems((x) => x.map((i) => (i.id === it.id ? { ...i, comprado: !i.comprado } : i))); // optimista
     try {
-      await fetch(`/api/shopping-list/${it.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ comprado: !it.comprado }) });
-    } catch { load(); }
+      const res = await fetch(`/api/shopping-list/${it.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ comprado: !it.comprado }) });
+      if (!res.ok) throw new Error('patch');
+    } catch { setToast('No se pudo actualizar.'); load(); } // revierte con el estado real
   };
 
   const quitar = async (it) => {
     setItems((x) => x.filter((i) => i.id !== it.id)); // optimista
     try {
-      await fetch(`/api/shopping-list/${it.id}`, { method: 'DELETE' });
-    } catch { load(); }
+      const res = await fetch(`/api/shopping-list/${it.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('delete');
+    } catch { setToast('No se pudo quitar.'); load(); }
   };
 
   const pendientes = items.filter((i) => !i.comprado);
@@ -85,9 +102,15 @@ export default function ListaPage() {
   return (
     <div style={{ maxWidth: 640, margin: '0 auto', padding: 'var(--s4)', display: 'flex', flexDirection: 'column', gap: 'var(--s4)' }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--s2)' }}>
-        <button type="button" className="link-btn" onClick={() => router.push('/')} aria-label="Inicio" style={{ fontSize: 22, lineHeight: 1 }}>‹</button>
+        <button type="button" className="link-btn" onClick={() => router.push(backHref)} aria-label="Volver" style={{ fontSize: 22, lineHeight: 1 }}>‹</button>
         <h1 className="c-title" style={{ margin: 0 }}>Lista de compras</h1>
       </header>
+
+      {toast && (
+        <div role="status" style={{ padding: 'var(--s2) var(--s3)', borderRadius: 'var(--r-md)', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-2)', fontSize: 13 }}>
+          {toast}
+        </div>
+      )}
 
       <div className="field" role="search" style={{ display: 'flex', gap: 'var(--s2)' }}>
         <input

@@ -17,9 +17,11 @@ const METHODS = [
 const TITLES = { method: 'Agregar a tu despensa', search: 'Buscar producto', scan: 'Escanear código', photo: 'Foto de etiqueta', confirm: 'Confirma el producto' };
 
 // Bottom-sheet para agregar producto. Flujo: método → (manual | buscar | escanear | foto) → Confirmar.
-export default function AddProductSheet({ onClose, onAdd, onPaywall }) {
-  const [step, setStep] = useState('method'); // method | search | scan | photo | confirm
-  const [draft, setDraft] = useState(null);
+export default function AddProductSheet({ onClose, onAdd, onPaywall, startManual = false }) {
+  // startManual (N-I7): entrar directo al form manual (p.ej. desde "Seguir con registro manual" del paywall).
+  const [step, setStep] = useState(startManual ? 'confirm' : 'method'); // method | search | scan | photo | confirm
+  const [draft, setDraft] = useState(startManual ? { confianza: 'user' } : null);
+  const [carry, setCarry] = useState(null); // N-I5: producto conocido (nombre/marca) al cambiar de método
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -45,8 +47,21 @@ export default function AddProductSheet({ onClose, onAdd, onPaywall }) {
     }
   };
 
-  // Buscar/Escanear/Foto entregan un draft precargado → Confirmar (campos editables).
-  const onPrefill = (d) => { setDraft(d); setStep('confirm'); };
+  // Cambiar de método conservando lo ya conocido (N-I5): al ir a foto/scan desde un resultado con
+  // nombre/marca (nutrición incompleta), se preserva para no re-teclear.
+  const goMethod = (m, keep) => { if (keep) setCarry(keep); setStep(m); };
+
+  // Buscar/Escanear/Foto entregan un draft precargado → Confirmar (campos editables). Si había un
+  // producto conocido (carry), se FUSIONA: el nuevo dato manda, pero nombre/marca/categoría/código
+  // conocidos rellenan lo que el método nuevo no trae (p.ej. la etiqueta da nutrición, no el nombre).
+  const onPrefill = (d) => {
+    const merged = carry
+      ? { ...carry, ...d, nombre: d.nombre || carry.nombre, marca: d.marca || carry.marca, categoria: d.categoria || carry.categoria, codigo: d.codigo || carry.codigo }
+      : d;
+    setCarry(null);
+    setDraft(merged);
+    setStep('confirm');
+  };
 
   const save = async (item) => {
     setSaving(true);
@@ -101,11 +116,11 @@ export default function AddProductSheet({ onClose, onAdd, onPaywall }) {
         )}
 
         {step === 'search' && (
-          <ProductSearchStep onPick={onPrefill} onUseMethod={(m) => setStep(m)} onBack={() => setStep('method')} />
+          <ProductSearchStep onPick={onPrefill} onUseMethod={goMethod} onBack={() => setStep('method')} />
         )}
 
         {step === 'scan' && (
-          <ScanView onDetected={onPrefill} onFallback={() => setStep('method')} onUseMethod={(m) => setStep(m)} />
+          <ScanView onDetected={onPrefill} onFallback={() => setStep('method')} onUseMethod={goMethod} />
         )}
 
         {step === 'photo' && (

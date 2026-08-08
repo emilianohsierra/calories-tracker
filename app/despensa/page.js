@@ -19,6 +19,7 @@ export default function DespensaPage() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
   const [adding, setAdding] = useState(false);
+  const [manualAfterPaywall, setManualAfterPaywall] = useState(false); // N-I7: registro manual tras el paywall de foto
   const [selected, setSelected] = useState(null);
   const [toast, setToast] = useState('');
   const [paywall, setPaywall] = useState(null); // { variant, feature, usage } (foto de etiqueta)
@@ -170,7 +171,14 @@ export default function DespensaPage() {
 
       {toast && <div className="toast" role="status" style={{ position: 'fixed', left: '50%', bottom: 20, transform: 'translateX(-50%)', zIndex: 60, width: 'calc(100% - 32px)', maxWidth: 448 }}>{toast}</div>}
 
-      {adding && <AddProductSheet onClose={() => setAdding(false)} onAdd={onAdd} onPaywall={setPaywall} />}
+      {(adding || manualAfterPaywall) && (
+        <AddProductSheet
+          startManual={manualAfterPaywall}
+          onClose={() => { setAdding(false); setManualAfterPaywall(false); }}
+          onAdd={onAdd}
+          onPaywall={setPaywall}
+        />
+      )}
       {selected && <PantryDetailSheet item={selected} onClose={() => setSelected(null)} onUpdate={onUpdate} onDelete={onDelete} />}
       {paywall && (
         <UpgradeModal
@@ -178,7 +186,7 @@ export default function DespensaPage() {
           feature={paywall.feature}
           usage={paywall.usage || { plan: 'free' }}
           resetLabel={paywall.usage?.resetLabel}
-          onManual={() => setPaywall(null)}
+          onManual={() => { setPaywall(null); setManualAfterPaywall(true); }}
           onClose={() => setPaywall(null)}
         />
       )}

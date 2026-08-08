@@ -57,7 +57,7 @@ export default function ProductSearchStep({ onPick, onUseMethod, onBack }) {
           variant="full"
           onAdd={(p) => onPick?.(productToDraft(p))}
           onEdit={(p) => onPick?.(productToDraft(p))}
-          onComplete={(mode) => (mode === 'foto' ? onUseMethod?.('photo') : onPick?.(productToDraft(result.producto)))}
+          onComplete={(mode) => (mode === 'foto' ? onUseMethod?.('photo', productToDraft(result.producto)) : onPick?.(productToDraft(result.producto)))}
         />
       )}
 

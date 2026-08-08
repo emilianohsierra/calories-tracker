@@ -222,6 +222,12 @@ export default function Home() {
             </span>
             <span aria-hidden="true">›</span>
           </button>
+          <button type="button" className="coach-entry" onClick={() => router.push('/lista')} style={{ marginTop: 'calc(-1 * var(--s2))' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <Icon name="clipboard" size={18} /> Mi lista de compras
+            </span>
+            <span aria-hidden="true">›</span>
+          </button>
           <div style={{ textAlign: 'right', margin: '-8px 0 var(--s3)' }}>
             <button type="button" className="link-btn" onClick={() => router.push('/perfil')}>
               Editar mi plan

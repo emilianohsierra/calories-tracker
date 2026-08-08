@@ -21,6 +21,7 @@ export default function ScanView({ onDetected, onFallback, onUseMethod }) {
   const photoRef = useRef(null);
   const [phase, setPhase] = useState('init'); // init | scanning | photo | denied | looking | notfound | error | nocode
   const [manual, setManual] = useState('');
+  const [lastCode, setLastCode] = useState(''); // N-I4: el código escaneado/buscado, para no re-teclear
   const [errText, setErrText] = useState('');
   const [status, setStatus] = useState(''); // indicador EN PANTALLA del estado del escáner (diagnóstico)
 
@@ -37,6 +38,7 @@ export default function ScanView({ onDetected, onFallback, onUseMethod }) {
   };
 
   const lookup = async (code) => {
+    setLastCode(String(code || '')); // recuerda el código para el fallback manual (N-I4)
     stopCamera();
     setPhase('looking');
     setErrText('');
@@ -235,7 +237,7 @@ export default function ScanView({ onDetected, onFallback, onUseMethod }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s3)' }}>
         <p className="c-subtitle" style={{ margin: 0 }}>No encontré ese producto en el catálogo. Prueba con la etiqueta o agrégalo a mano.</p>
         {onUseMethod && <button type="button" className="btn btn-primary" onClick={() => onUseMethod('photo')}>Foto de etiqueta</button>}
-        <button type="button" className="btn btn-ghost" onClick={() => onDetected({ confianza: 'user', codigo: manual })}>Agregar manual</button>
+        <button type="button" className="btn btn-ghost" onClick={() => onDetected({ confianza: 'user', codigo: lastCode || manual })}>Agregar manual</button>
         <button type="button" className="link-btn" onClick={() => setPhase('photo')}>Escanear otro</button>
         <button type="button" className="link-btn" onClick={onFallback}>‹ Otro método</button>
       </div>

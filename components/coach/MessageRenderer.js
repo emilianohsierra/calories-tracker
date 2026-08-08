@@ -38,6 +38,16 @@ const ACCION_PROMPT = {
   cambiar_plan: 'Quiero cambiar mi plan.',
 };
 
+// N-I9: honra accion.ref (p.ej. momento del día) en vez de asumir siempre "cenar".
+const MOMENTO_VERBO = { desayuno: 'desayunar', comida: 'comer', cena: 'cenar', snack: 'un snack' };
+function promptDeAccion(accion) {
+  if (accion?.accion === 'generar_cena' && accion.ref) {
+    const v = MOMENTO_VERBO[String(accion.ref).toLowerCase()];
+    if (v) return v === 'un snack' ? '¿Qué snack puedo comer hoy?' : `¿Qué puedo ${v} hoy?`;
+  }
+  return ACCION_PROMPT[accion?.accion] || '';
+}
+
 function Card({ b, onRegisterMeal }) {
   switch (b.tipo) {
     case 'nutrition':
@@ -72,7 +82,7 @@ export default function MessageRenderer({ content, onAccion, onRegisterMeal }) {
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => onAccion?.(accion, ACCION_PROMPT[accion.accion])}
+              onClick={() => onAccion?.(accion, promptDeAccion(accion))}
             >
               {accion.label}
             </button>
