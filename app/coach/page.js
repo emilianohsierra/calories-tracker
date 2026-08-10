@@ -14,6 +14,7 @@ import CoachOrb from '@/components/coach/CoachOrb';
 import TypingIndicator from '@/components/coach/TypingIndicator';
 import QuickActions from '@/components/coach/QuickActions';
 import Composer from '@/components/coach/Composer';
+import CoachNotifications from '@/components/coach/CoachNotifications';
 import { downscaleImage } from '@/lib/image';
 import { localDateStr } from '@/lib/format';
 import { readPaywall } from '@/lib/paywall';
@@ -347,6 +348,9 @@ export default function CoachPage() {
           {debug && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>build {BUILD}</span>}
         </div>
       </header>
+
+      {/* Proactividad Fase 1: bandeja in-app mínima (Rams pulirá el badge/bandeja). */}
+      <CoachNotifications />
 
       <div className="coach-thread" ref={threadRef}>
         {messages.length === 0 && <div className="chat-bubble coach">{greetingText(ctx)}</div>}

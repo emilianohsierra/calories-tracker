@@ -1,0 +1,180 @@
+import { NextResponse } from 'next/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { getHomeBriefing } from '@/lib/coach/briefing';
+import { localDateTime } from '@/lib/coach/context';
+import {
+  evalMissedMeal, evalLowProtein, evalStreak, evalWeeklyReview,
+  enQuietHours, seleccionarPorPresupuesto, calcularRacha, diaPrevio, dedupeKey,
+  TOGGLE_COL,
+} from '@/lib/coach/triggers';
+
+// Coach · Proactividad Fase 1 — CRON diario (Vercel Hobby).
+// Recorre usuarios, evalúa triggers DETERMINISTAS (0 IA) y escribe notificaciones in-app SCOPED.
+// Autenticación: bearer CRON_SECRET (Vercel lo inyecta como Authorization: Bearer si la env existe).
+// service_role (bypassa RLS) SOLO tras verificar el secreto. Idempotente por (usuario,tipo,día).
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // Hobby: tope de duración; el batching respeta un presupuesto de tiempo.
+
+const PAGE = 200;           // usuarios por página
+const TIME_BUDGET_MS = 45_000; // corta antes del tope de la función (sin truncar en silencio: se reporta)
+const STREAK_WINDOW_DAYS = 35;
+
+// Defaults cuando el usuario no tiene fila en coach_notification_prefs (deploy-safe / usuario nuevo).
+const PREFS_DEFAULT = {
+  modo: 'normal', quiet_start: 22, quiet_end: 8, proactive_on: true,
+  on_missed_meal: true, on_low_protein: true, on_streak: true, on_weekly_review: true,
+};
+
+function authorized(req) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return false; // sin secreto configurado → nunca autoriza (fail-closed)
+  const auth = req.headers.get('authorization') || '';
+  return auth === `Bearer ${secret}`;
+}
+
+export async function GET(req) { return run(req); }
+export async function POST(req) { return run(req); } // permite scheduler externo (QStash/cron-job.org)
+
+async function run(req) {
+  if (!authorized(req)) return NextResponse.json({ error: 'no autorizado' }, { status: 401 });
+
+  const t0 = Date.now();
+  const { date: hoy, time } = localDateTime();
+  const hora = parseInt(String(time).slice(0, 2), 10) || 0;
+  // Día del reporte semanal = domingo (America/Mexico_City). getUTCDay sobre la fecha local es estable.
+  const esDiaReporte = new Date(`${hoy}T00:00:00Z`).getUTCDay() === 0;
+
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch (e) {
+    console.error('[cron/tick] sin config admin:', e?.code || e?.message);
+    return NextResponse.json({ error: 'sin configuración' }, { status: 500 });
+  }
+
+  const stats = { scanned: 0, eligible: 0, inserted: 0, skippedQuiet: 0, skippedOff: 0, pages: 0, truncated: false };
+  let cursor = null; // paginación por user_id (keyset)
+
+  try {
+    for (;;) {
+      if (Date.now() - t0 > TIME_BUDGET_MS) { stats.truncated = true; break; }
+      let q = admin.from('nutrition_profiles').select('user_id').order('user_id', { ascending: true }).limit(PAGE);
+      if (cursor) q = q.gt('user_id', cursor);
+      const { data: rows, error } = await q;
+      if (error) {
+        // Tabla base ausente = despliegue sin datos → no-op (no crash).
+        console.error('[cron/tick] lectura de usuarios falló:', { code: error.code, details: error.details });
+        break;
+      }
+      if (!rows || rows.length === 0) break;
+      stats.pages += 1;
+
+      for (const { user_id } of rows) {
+        stats.scanned += 1;
+        cursor = user_id;
+        if (Date.now() - t0 > TIME_BUDGET_MS) { stats.truncated = true; break; }
+        try {
+          const n = await procesarUsuario(admin, user_id, { hoy, hora, esDiaReporte, stats });
+          stats.inserted += n;
+        } catch (e) {
+          console.error('[cron/tick] usuario falló (continúa):', user_id, e?.code || e?.message);
+        }
+      }
+      if (stats.truncated) break;
+      if (rows.length < PAGE) break; // última página
+    }
+  } catch (e) {
+    console.error('[cron/tick] EXCEPCIÓN:', e?.message);
+    return NextResponse.json({ error: 'fallo interno', stats }, { status: 500 });
+  }
+
+  console.log('[cron/tick] fin', { ...stats, ms: Date.now() - t0, hoy });
+  return NextResponse.json({ ok: true, stats });
+}
+
+async function procesarUsuario(admin, userId, { hoy, hora, esDiaReporte, stats }) {
+  // Prefs (deploy-safe: sin fila o sin tabla → defaults).
+  const prefsRes = await admin.from('coach_notification_prefs').select('*').eq('user_id', userId).maybeSingle();
+  const prefs = { ...PREFS_DEFAULT, ...(prefsRes?.data || {}) };
+
+  if (!prefs.proactive_on) { stats.skippedOff += 1; return 0; }
+  if (enQuietHours(hora, prefs.quiet_start, prefs.quiet_end)) { stats.skippedQuiet += 1; return 0; }
+  stats.eligible += 1;
+
+  // Motor: cifras reales del día (mismos reads que la HOME). 0 IA.
+  const brief = await getHomeBriefing(admin, userId);
+  const objetivo = brief.macrosObjetivo;
+  const consumido = brief.macrosConsumidos;
+
+  // Plan (Pro = profiles.plan 'premium', misma fuente que consumir_ia).
+  const planRes = await admin.from('profiles').select('plan').eq('id', userId).maybeSingle();
+  const isPro = planRes?.data?.plan === 'premium';
+
+  // Historial de fechas con registro (racha + agregado semanal) en una sola query.
+  const desde = diaPrevio(hoy);
+  const sinceStreak = restarDias(hoy, STREAK_WINDOW_DAYS);
+  const histRes = await admin
+    .from('meals')
+    .select('date, calories')
+    .eq('user_id', userId)
+    .gte('date', sinceStreak);
+  const hist = histRes?.data || [];
+  const fechas = new Set(hist.map((m) => m.date));
+  const { rachaHoy, rachaAyer, registroHoy } = calcularRacha(fechas, hoy);
+
+  // Agregado semanal (últimos 7 días) para weekly_review.
+  const since7 = restarDias(hoy, 6);
+  const semana = hist.filter((m) => m.date >= since7);
+  const diasSemana = new Set(semana.map((m) => m.date)).size;
+  const kcalSemana = semana.reduce((a, m) => a + (m.calories || 0), 0);
+  const kcalPromedio = diasSemana > 0 ? kcalSemana / diasSemana : 0;
+
+  // Evaluadores puros → candidatos. Se filtran por los toggles del usuario.
+  const candidatos = [
+    evalMissedMeal({ consumido, horaLocal: hora }),
+    evalLowProtein({ objetivo, consumido, horaLocal: hora }),
+    evalStreak({ rachaHoy, rachaAyer, registroHoy }),
+    evalWeeklyReview({ esDiaReporte, isPro, diasConRegistro: diasSemana, kcalPromedio }),
+  ].filter(Boolean).filter((n) => prefs[TOGGLE_COL[n.event_type]] !== false);
+
+  if (!candidatos.length) return 0;
+
+  // Anti-spam: cuántas notificaciones ya tiene HOY (para el presupuesto por modo).
+  const { count: yaHoy } = await admin
+    .from('coach_notifications')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('dia', hoy);
+
+  const elegidos = seleccionarPorPresupuesto(candidatos, prefs.modo, yaHoy || 0);
+  if (!elegidos.length) return 0;
+
+  // Insert idempotente: ON CONFLICT (user_id,event_type,dia,slot) DO NOTHING vía upsert ignore.
+  const filas = elegidos.map((n) => ({
+    user_id: userId,
+    event_type: n.event_type,
+    dia: hoy,
+    slot: '',
+    titulo: n.titulo,
+    cuerpo: n.cuerpo,
+    prioridad: n.prioridad,
+  }));
+  const { data: ins, error } = await admin
+    .from('coach_notifications')
+    .upsert(filas, { onConflict: 'user_id,event_type,dia,slot', ignoreDuplicates: true })
+    .select('id');
+  if (error) {
+    // Tabla ausente (deploy-safe) u otro fallo → log con code/details, no crashea el cron.
+    console.error('[cron/tick] insert notif falló:', { code: error.code, details: error.details, userId });
+    return 0;
+  }
+  if (ins?.length) console.log('[cron/tick] nudge', { userId, tipos: elegidos.map((n) => dedupeKey(n.event_type, hoy)) });
+  return ins?.length || 0;
+}
+
+// 'YYYY-MM-DD' menos N días (UTC-safe).
+function restarDias(fecha, n) {
+  const d = new Date(`${fecha}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
