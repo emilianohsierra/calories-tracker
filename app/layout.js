@@ -1,8 +1,11 @@
 import './globals.css';
+import PushRegister from '@/components/PushRegister';
 
 export const metadata = {
   title: 'Registro Calórico',
   description: 'Control calórico con análisis de platillos por IA',
+  manifest: '/manifest.json',
+  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Coach' },
 };
 
 // Anti-flash: fija data-theme ANTES del primer render (lee localStorage). En "system"
@@ -14,9 +17,13 @@ export default function RootLayout({ children }) {
     <html lang="es">
       <head>
         <meta name="theme-color" content="#FBFBF9" />
+        <link rel="apple-touch-icon" href="/icon.svg" />
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
       </head>
-      <body>{children}</body>
+      <body>
+        <PushRegister />
+        {children}
+      </body>
     </html>
   );
 }

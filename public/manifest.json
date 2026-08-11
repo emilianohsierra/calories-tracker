@@ -1,0 +1,15 @@
+{
+  "name": "Registro Calórico · Coach",
+  "short_name": "Coach",
+  "description": "Tu coach nutricional: registra, pregunta y recibe avisos.",
+  "start_url": "/coach",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FBFBF9",
+  "theme_color": "#FBFBF9",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
