@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+import Anthropic from '@anthropic-ai/sdk';
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getHomeBriefing } from '@/lib/coach/briefing';
@@ -7,6 +9,9 @@ import {
   enQuietHours, seleccionarPorPresupuesto, calcularRacha, diaPrevio, dedupeKey,
   TOGGLE_COL,
 } from '@/lib/coach/triggers';
+import { puliArNudge } from '@/lib/coach/redactar';
+
+const COACH_MODEL = 'claude-haiku-4-5'; // F1.5: Haiku solo PULE el tono (cifras del motor, no del modelo)
 
 // Coach · Proactividad Fase 1 — CRON diario (Vercel Hobby).
 // Recorre usuarios, evalúa triggers DETERMINISTAS (0 IA) y escribe notificaciones in-app SCOPED.
@@ -52,7 +57,13 @@ async function run(req) {
     return NextResponse.json({ error: 'sin configuración' }, { status: 500 });
   }
 
-  const stats = { scanned: 0, eligible: 0, inserted: 0, skippedQuiet: 0, skippedOff: 0, pages: 0, truncated: false };
+  // F1.5 · IA para PULIR tono (Pro-only, más gating por cap/kill-switch dentro de consumir_proactivo).
+  // Kill instantáneo por env (PROACTIVO_IA_OFF=1) o sin API key → 0 IA (todo cae al texto determinista).
+  const iaOff = process.env.PROACTIVO_IA_OFF === '1';
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim();
+  const anthropic = (!iaOff && apiKey) ? new Anthropic({ apiKey }) : null;
+
+  const stats = { scanned: 0, eligible: 0, inserted: 0, skippedQuiet: 0, skippedOff: 0, pages: 0, truncated: false, iaOk: 0, iaFallback: 0 };
   let cursor = null; // paginación por user_id (keyset)
 
   try {
@@ -74,7 +85,7 @@ async function run(req) {
         cursor = user_id;
         if (Date.now() - t0 > TIME_BUDGET_MS) { stats.truncated = true; break; }
         try {
-          const n = await procesarUsuario(admin, user_id, { hoy, hora, esDiaReporte, stats });
+          const n = await procesarUsuario(admin, user_id, { hoy, hora, esDiaReporte, stats, anthropic });
           stats.inserted += n;
         } catch (e) {
           console.error('[cron/tick] usuario falló (continúa):', user_id, e?.code || e?.message);
@@ -92,7 +103,7 @@ async function run(req) {
   return NextResponse.json({ ok: true, stats });
 }
 
-async function procesarUsuario(admin, userId, { hoy, hora, esDiaReporte, stats }) {
+async function procesarUsuario(admin, userId, { hoy, hora, esDiaReporte, stats, anthropic }) {
   // Prefs (deploy-safe: sin fila o sin tabla → defaults).
   const prefsRes = await admin.from('coach_notification_prefs').select('*').eq('user_id', userId).maybeSingle();
   const prefs = { ...PREFS_DEFAULT, ...(prefsRes?.data || {}) };
@@ -149,16 +160,23 @@ async function procesarUsuario(admin, userId, { hoy, hora, esDiaReporte, stats }
   const elegidos = seleccionarPorPresupuesto(candidatos, prefs.modo, yaHoy || 0);
   if (!elegidos.length) return 0;
 
-  // Insert idempotente: ON CONFLICT (user_id,event_type,dia,slot) DO NOTHING vía upsert ignore.
-  const filas = elegidos.map((n) => ({
-    user_id: userId,
-    event_type: n.event_type,
-    dia: hoy,
-    slot: '',
-    titulo: n.titulo,
-    cuerpo: n.cuerpo,
-    prioridad: n.prioridad,
-  }));
+  // Cuerpo final: determinista (verdad del motor) por defecto. Para Pro con IA activa, Haiku PULE el
+  // tono; si algo se sale del carril → cae al determinista (nunca rompe ni publica fuera de carril).
+  const filas = [];
+  for (const n of elegidos) {
+    const cuerpo = (anthropic && isPro)
+      ? await puliArTono(admin, anthropic, userId, n, prefs.modo, stats)
+      : n.cuerpo; // Free o IA apagada → texto determinista de F1 (0 IA)
+    filas.push({
+      user_id: userId,
+      event_type: n.event_type,
+      dia: hoy,
+      slot: '',
+      titulo: n.titulo,
+      cuerpo,
+      prioridad: n.prioridad,
+    });
+  }
   const { data: ins, error } = await admin
     .from('coach_notifications')
     .upsert(filas, { onConflict: 'user_id,event_type,dia,slot', ignoreDuplicates: true })
@@ -170,6 +188,29 @@ async function procesarUsuario(admin, userId, { hoy, hora, esDiaReporte, stats }
   }
   if (ins?.length) console.log('[cron/tick] nudge', { userId, tipos: elegidos.map((n) => dedupeKey(n.event_type, hoy)) });
   return ins?.length || 0;
+}
+
+// F1.5 · pule el tono de UN nudge con IA. Cablea el metering server-only (consumir/reembolsar_proactivo)
+// a la orquestación testeable puliArNudge (reserva → Haiku → post-check → fallback determinista).
+async function puliArTono(admin, anthropic, userId, n, modo, stats) {
+  const rid = crypto.randomUUID();
+  const { cuerpo, via } = await puliArNudge({
+    anthropic, isPro: true, model: COACH_MODEL, nudge: n, modo,
+    reservar: async () => {
+      const { data, error } = await admin.rpc('consumir_proactivo', { p_request_id: rid, p_user_id: userId });
+      if (error) {
+        // RPC ausente (sin proactividad-ia.sql) u otro fallo → tratamos como no-permitido → determinista.
+        console.error('[cron/tick] consumir_proactivo falló:', { code: error.code, details: error.details });
+        return { allowed: false, reason: 'rpc_error' };
+      }
+      return data;
+    },
+    reembolsar: async () => {
+      try { await admin.rpc('reembolsar_proactivo', { p_request_id: rid }); } catch { /* noop */ }
+    },
+  });
+  if (via === 'ia') stats.iaOk += 1; else stats.iaFallback += 1;
+  return cuerpo;
 }
 
 // 'YYYY-MM-DD' menos N días (UTC-safe).
