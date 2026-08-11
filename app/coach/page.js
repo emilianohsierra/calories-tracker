@@ -343,14 +343,12 @@ export default function CoachPage() {
           <span className="coach-title">Mi Coach</span>
         </div>
         <div className="coach-controls">
+          <CoachNotifications />
           <PersonalityPicker value={tone} onChange={setTone} />
           <ThemeToggle compact />
           {debug && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>build {BUILD}</span>}
         </div>
       </header>
-
-      {/* Proactividad Fase 1: bandeja in-app mínima (Rams pulirá el badge/bandeja). */}
-      <CoachNotifications />
 
       <div className="coach-thread" ref={threadRef}>
         {messages.length === 0 && <div className="chat-bubble coach">{greetingText(ctx)}</div>}
