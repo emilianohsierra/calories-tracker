@@ -1,8 +1,14 @@
 /* Service Worker — Coach Proactividad Fase 2 (web push).
    Solo maneja push + notificationclick; NO cachea (la app no es offline-first en F2). */
 
+// Auto-update: el SW nuevo toma control de inmediato (no queda 'waiting') y reclama las pestañas
+// abiertas → el cliente hace un reload suave (ver components/PushRegister.js) y sirve la última versión.
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+// Por si un SW nuevo quedara en espera, el cliente puede pedirle que active ya.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
 
 // Push entrante → muestra la notificación. El payload lo arma el cron (título/cuerpo YA validados
 // por el post-check F1.5; el SW no reescribe nada).
