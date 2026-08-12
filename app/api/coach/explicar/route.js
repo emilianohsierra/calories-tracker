@@ -102,11 +102,13 @@ async function redactarPorque({ anthropic, base, nivel }) {
     `Eres un coach de nutrición. Reescribe esta explicación educativa para un usuario de nivel ${nivel}, personalizándola y clara.\n` +
     'REGLAS ABSOLUTAS (si rompes una, fallaste):\n' +
     '1) Educa el "por qué" con marco SIEMPRE neutro y saludable, "añadir, no restringir".\n' +
-    '2) PRESERVA EXACTAS las cifras del texto base (los números reales del usuario): cópialas idénticas; no las cambies ni las contradigas.\n' +
+    '2) PRESERVA EXACTAS las cifras del texto base (los números reales del usuario): cópialas idénticas con su unidad; no las cambies ni las contradigas. NO propongas ingestas ni cifras calóricas/de peso que NO estén en el texto base (nada de "apunta a X kcal" ni "baja Y kg").\n' +
     '3) PROHIBIDO promover: restricción extrema, "deja de comer"/saltarse comidas como estrategia, purga/vómito/laxantes, ayuno peligroso, culpa/vergüenza/castigo por comer, pérdida de peso peligrosamente rápida, dietas cero-carbohidratos o cero-grasa como meta, ejercicio como castigo, o demonizar alimentos ("prohibido/malo/pecado/veneno").\n' +
     '4) SÍ puedes hablar de peso, grasa corporal, déficit/superávit, composición corporal, IMC, calorías y macros en marco neutro-educativo.\n' +
-    '5) CERO consejo médico o diagnóstico; ante condiciones o síntomas, deriva a un profesional de salud.\n' +
-    '6) Máximo 3 frases, español, sin emojis. Devuelve SOLO el texto reescrito.';
+    '5) ANTI-MITOS: no afirmes mitos: no existen alimentos que "quemen grasa", ni que aceleren el metabolismo mágicamente, ni superalimentos milagro; no demonices carbohidratos, grasas ni gluten sin razón clínica (celiaquía/alergia).\n' +
+    '6) MÉXICO: usa contexto y ejemplos de México cuando apliquen (tortilla de maíz nixtamalizada, frijol, comida corrida).\n' +
+    '7) CERO consejo médico o diagnóstico; ante condiciones o síntomas, deriva a un profesional de salud.\n' +
+    '8) Máximo 3 frases, español, sin emojis. Devuelve SOLO el texto reescrito.';
   const r = await anthropic.messages.create({
     model: COACH_MODEL,
     max_tokens: 240,
