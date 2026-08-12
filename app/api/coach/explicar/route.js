@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { localDateTime } from '@/lib/coach/context';
 import { esDatoDeSalud } from '@/lib/coach/actions';
 import { explicarConcepto } from '@/lib/coach/educacion';
+import { juezEducacionIA } from '@/lib/coach/juezEducacionIA';
 import { EXPLICACIONES, NIVEL_DEFAULT } from '@/lib/coach/curriculum';
 
 // Coach · Educación — "¿Por qué?" on-demand (afordance de 1 tap + preguntas de por-qué). Explica al
@@ -81,6 +82,8 @@ export async function POST(req) {
           },
           reembolsar: async () => { try { await supabase.rpc('reembolsar_ia', { p_request_id: rid }); } catch { /* noop */ } },
           redactar: (base) => redactarPorque({ anthropic, base, nivel }),
+          // Juez LLM (2ª etapa del backstop). Fail-closed dentro de explicarConcepto (si lanza → base).
+          juez: (texto) => juezEducacionIA({ anthropic, model: COACH_MODEL, texto }),
         },
         { concepto, nivel, ctx },
       )
