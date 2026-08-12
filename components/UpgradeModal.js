@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import Icon from '@/components/ui/Icon';
+import { useModalA11y } from '@/lib/ui/useModalA11y';
 
 // ── Oferta (fuente: plan/paywall-copy-offer.md, Drucker) ──────────────────────
 // MENSUAL SOLO en este release: es el único price cobrable en Stripe (test).
@@ -141,50 +142,12 @@ export default function UpgradeModal({ variant = 'plans', feature, usage, resetL
     : LIVE_BULLETS;
 
   const overlayRef = useRef(null);
-  const modalRef = useRef(null);
-  const closeRef = useRef(null);
   const busyRef = useRef(busy);
   busyRef.current = busy; // A7: Escape lee el busy actual sin re-montar el efecto
 
-  // ── A11y: Escape para cerrar, bloqueo de scroll, foco inicial + trampa de foco,
-  // y retorno de foco al desmontar. No toca la lógica de negocio.
-  useEffect(() => {
-    const prevActive = typeof document !== 'undefined' ? document.activeElement : null;
-    document.body.style.overflow = 'hidden';
-    modalRef.current?.focus(); // A8: foco inicial al diálogo (anuncia el label), no a la X
-
-    const onKey = (e) => {
-      if (e.key === 'Escape') {
-        if (busyRef.current) return; // A7: no cerrar durante el checkout
-        e.preventDefault();
-        onClose();
-        return;
-      }
-      if (e.key !== 'Tab') return;
-      const root = modalRef.current;
-      if (!root) return;
-      const focusables = root.querySelectorAll(
-        'button:not([disabled]), a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
-      if (focusables.length === 0) return;
-      const first = focusables[0];
-      const last = focusables[focusables.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
-      prevActive?.focus?.();
-    };
-  }, [onClose]);
+  // A11y (Escape+guard busy, foco inicial al diálogo, trampa de foco, scroll-lock, retorno de foco):
+  // patrón extraído a useModalA11y (mismo comportamiento). El guard evita cerrar durante el checkout.
+  const modalRef = useModalA11y(onClose, () => !busyRef.current);
 
   // Inicia el flujo de Stripe YA existente (checkout o portal). NO se rehace el backend.
   const go = async (endpoint) => {
@@ -250,7 +213,6 @@ export default function UpgradeModal({ variant = 'plans', feature, usage, resetL
           <button
             type="button"
             className="pw-close"
-            ref={closeRef}
             onClick={onClose}
             disabled={busy}
             aria-label="Cerrar"

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import { getNivelPreguntas, postNivel } from '@/lib/coach/eduClient';
+import { useModalA11y } from '@/lib/ui/useModalA11y';
 
 // A) Evaluación de nivel: breve, SALTABLE (sin penalización), no intrusiva. El nivel es INVISIBLE
 // (no se muestra crudo); la UI solo confirma "listo". Recalibrable. Todo del backend determinista.
@@ -15,6 +16,7 @@ const AUTO_LABEL = {
 };
 
 export default function NivelEvaluacion({ onClose, onDone }) {
+  const modalRef = useModalA11y(onClose);
   const [preguntas, setPreguntas] = useState(null);
   const [fase, setFase] = useState('intro'); // intro | preguntas | guardando | listo | error
   const [respuestas, setRespuestas] = useState({}); // { [id]: texto }
@@ -27,7 +29,7 @@ export default function NivelEvaluacion({ onClose, onDone }) {
     if (!r || r._error) { setFase('error'); return; }
     setFase('listo');
     onDone?.(); // refresca el contador / estado del hub
-    setTimeout(() => onClose(), 1100);
+    setTimeout(() => onClose(), 1600); // M3: margen para que el lector anuncie el role=status
   };
 
   const elegirAuto = async (id) => { setFase('guardando'); finalizar(await postNivel({ autoSelect: id })); };
@@ -40,7 +42,7 @@ export default function NivelEvaluacion({ onClose, onDone }) {
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label="Personalizar explicaciones" style={{ maxWidth: 480 }}>
+      <div className="modal" ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Personalizar explicaciones" style={{ maxWidth: 480 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--s3)' }}>
           <h2 style={{ margin: 0, fontSize: 18 }}>Ajusta tus explicaciones</h2>
           <button type="button" onClick={onClose} aria-label="Cerrar" style={{ display: 'inline-flex', width: 'var(--touch)', height: 'var(--touch)', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', color: 'var(--text-3)', cursor: 'pointer', margin: '-8px -8px 0 0' }}>
@@ -49,7 +51,7 @@ export default function NivelEvaluacion({ onClose, onDone }) {
         </div>
 
         {fase === 'listo' ? (
-          <div className="empty-state" style={{ padding: 'var(--s5) var(--s4)' }}>
+          <div className="empty-state" role="status" style={{ padding: 'var(--s5) var(--s4)' }}>
             <div style={{ color: 'var(--brand-strong)', marginBottom: 'var(--s2)' }}><Icon name="check" size={26} /></div>
             Listo. Ajusté cómo te explico las cosas.
           </div>

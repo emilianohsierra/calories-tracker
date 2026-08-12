@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import { postLeccion, postQuiz } from '@/lib/coach/eduClient';
+import { useModalA11y } from '@/lib/ui/useModalA11y';
 
 // Tarjeta de micro-lección + quiz de 1 pregunta (C). Contenido y quiz vienen del backend
 // determinista (POST /educacion accion:'leccion'). El quiz registra avance (accion:'quiz').
 // Deploy-safe: si falla → mensaje suave y cierre. Respeta el gate: sólo se ABRE si el usuario lo pide.
 export default function LeccionQuiz({ concepto, onClose, onDone }) {
+  const modalRef = useModalA11y(onClose);
   const [fase, setFase] = useState('cargando'); // cargando | leccion | pro | error
   const [lec, setLec] = useState(null);          // { titulo, cuerpo, quiz }
   const [elegida, setElegida] = useState(null);  // índice elegido en el quiz
@@ -39,7 +41,7 @@ export default function LeccionQuiz({ concepto, onClose, onDone }) {
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label="Micro-lección" style={{ maxWidth: 480 }}>
+      <div className="modal" ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Micro-lección" style={{ maxWidth: 480 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--s3)' }}>
           <h2 style={{ margin: 0, fontSize: 18, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <Icon name="book" size={18} /> Aprende en 30 s
@@ -90,11 +92,13 @@ export default function LeccionQuiz({ concepto, onClose, onDone }) {
                     );
                   })}
                 </div>
-                {elegida != null && (
-                  <p className="c-subtitle" style={{ marginTop: 'var(--s3)', color: elegida === q.correcta ? 'var(--ok)' : 'var(--text-2)' }}>
-                    {q.feedback}
-                  </p>
-                )}
+                <div aria-live="polite" role="status">
+                  {elegida != null && (
+                    <p className="c-subtitle" style={{ marginTop: 'var(--s3)', color: elegida === q.correcta ? 'var(--ok)' : 'var(--text-2)' }}>
+                      <strong>{elegida === q.correcta ? 'Correcto.' : 'Incorrecto.'}</strong> {q.feedback}
+                    </p>
+                  )}
+                </div>
               </div>
             )}
 
