@@ -1,8 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import crypto from 'node:crypto';
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { assembleContext } from '@/lib/coach/context';
+import { mantenerResumen, redactarResumen } from '@/lib/coach/summarize';
 import { registrarComidaFoto, registrarTexto, actualizarContextoDia, generarCena, cambiarObjetivo, guardarMemoria, agregarAListaCompras, sugerirSustitucion } from '@/lib/coach/actions';
 import { intentListaCompras, intentArmarLista, extraerItemsLista } from '@/lib/coach/intent';
 import { escribirLista } from '@/lib/pantry/shopping';
@@ -704,6 +705,10 @@ export async function POST(request) {
     await supabase.from('coach_conversations').update({ last_active_at: new Date().toISOString() }).eq('id', conv.id);
     requestId = null;
 
+    // Historial Fase A · resumen progresivo (GAP 2): tras responder, si el hilo desbordó la ventana
+    // verbatim, condensa el delta. Corre en `after()` → NO añade latencia al turno. Deploy-safe.
+    after(() => agendarResumen(supabase, anthropic, conv.id, user.id));
+
     // coachRemaining (null = ilimitado/Pro; número = degustación Free restante) para que la
     // UI pinte el badge / aviso 80% (paywall-triggers §3). Lectura de consumir_ia, no lo toca.
     return NextResponse.json({ response, registered: !!guardado, planChange: planChange || null, coachRemaining: gate?.remaining ?? null });
@@ -714,5 +719,50 @@ export async function POST(request) {
     const authHint = err?.status === 401 ? ' (auth)' : '';
     const diag = `⚠️ ${err?.name || 'Error'} ${err?.status || ''}${authHint}: ${err?.message || 'desconocido'}`.trim();
     return NextResponse.json({ error: diag }, { status: 200 });
+  }
+}
+
+// Historial Fase A · cablea el resumen progresivo (lib/coach/summarize) con Supabase + Haiku.
+// Metering: consumir_resumen (feature 'resumen') + reembolsar_ia (genérico). Deploy-safe: sin la
+// tabla/RPC/IA → mantenerResumen degrada a skip (solo-cola), nunca lanza.
+async function agendarResumen(supabase, anthropic, convId, userId) {
+  if (!anthropic || !supabase) return;
+  const rid = crypto.randomUUID();
+  let sumRow; // cache de la fila de coach_summaries (una sola lectura)
+  const leerSum = async () => {
+    if (sumRow === undefined) {
+      const { data } = await supabase.from('coach_summaries').select('summary, upto_message_id').eq('conversation_id', convId).maybeSingle();
+      sumRow = data || { summary: '', upto_message_id: null };
+    }
+    return sumRow;
+  };
+  try {
+    const res = await mantenerResumen({
+      leerMensajes: async () => {
+        const { data } = await supabase
+          .from('coach_messages').select('id, role, content')
+          .eq('conversation_id', convId).in('role', ['user', 'assistant'])
+          .order('created_at', { ascending: true });
+        return data || [];
+      },
+      leerUpto: async () => (await leerSum()).upto_message_id || null,
+      leerResumen: async () => (await leerSum()).summary || '',
+      reservar: async () => {
+        const { data, error } = await supabase.rpc('consumir_resumen', { p_request_id: rid });
+        if (error) { console.error('[coach/resumen] consumir_resumen falló:', { code: error.code }); return { allowed: false, reason: 'rpc_error' }; }
+        return data;
+      },
+      reembolsar: async () => { try { await supabase.rpc('reembolsar_ia', { p_request_id: rid }); } catch { /* noop */ } },
+      redactar: (previo, delta) => redactarResumen({ anthropic, model: COACH_MODEL, resumenPrevio: previo, delta }),
+      guardar: async (resumen, nuevoUpto) => {
+        await supabase.from('coach_summaries').upsert(
+          { conversation_id: convId, user_id: userId, summary: resumen, upto_message_id: nuevoUpto, updated_at: new Date().toISOString() },
+          { onConflict: 'conversation_id' },
+        );
+      },
+    });
+    if (res.via === 'resumen') console.log('[coach/resumen] actualizado', { convId, upto: res.upto });
+  } catch (e) {
+    console.error('[coach/resumen] fallo (no bloquea):', e?.message);
   }
 }
