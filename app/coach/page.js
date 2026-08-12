@@ -15,6 +15,7 @@ import TypingIndicator from '@/components/coach/TypingIndicator';
 import QuickActions from '@/components/coach/QuickActions';
 import Composer from '@/components/coach/Composer';
 import CoachNotifications from '@/components/coach/CoachNotifications';
+import MiAprendizaje from '@/components/coach/MiAprendizaje';
 import { downscaleImage } from '@/lib/image';
 import { localDateStr } from '@/lib/format';
 import { readPaywall } from '@/lib/paywall';
@@ -343,6 +344,7 @@ export default function CoachPage() {
           <span className="coach-title">Mi Coach</span>
         </div>
         <div className="coach-controls">
+          <MiAprendizaje />
           <CoachNotifications />
           <PersonalityPicker value={tone} onChange={setTone} />
           <ThemeToggle compact />

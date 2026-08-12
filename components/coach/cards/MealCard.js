@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Icon from '@/components/ui/Icon';
+import PorQueChip from '@/components/coach/PorQueChip';
 
 // Tarjeta de comida sugerida (Karpathy §4: bloque `meal`). Título + chips de macros +
 // ingredientes. "Registrar" reusa el guardado existente vía onRegister (POST /api/meals).
@@ -40,6 +41,8 @@ export default function MealCard({ titulo, kcal = 0, prot_g = 0, carb_g = 0, gra
           <Icon name="box" size={13} /> usa {pantryUses} de tu despensa
         </div>
       )}
+      {/* "¿Por qué?" educativo: por qué priorizamos la proteína, adaptado al nivel (backend). */}
+      <div style={{ marginTop: 'var(--s1)' }}><PorQueChip concepto="proteina" /></div>
       {onRegister ? (
         <div className="c-card__actions">
           <button type="button" className="btn btn-primary" onClick={register} disabled={state !== 'idle'} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
