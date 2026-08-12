@@ -55,17 +55,16 @@ export async function POST(req) {
     const nivel = perfil?.nutrition_knowledge_level || NIVEL_DEFAULT;
     const ctx = { targets: targets || null, today: { prot, pendientes: targets ? {} : null } };
 
-    // MVP: la personalización IA está APAGADA por flag (default off) → devolvemos la BASE
-    // DETERMINISTA (ya correcta, adaptada a los 4 niveles + línea de datos reales del motor): 0
-    // llamadas a Haiku, 0 costo, explicación correcta al nivel. El código de personalización queda
-    // intacto detrás del flag para encenderlo en Fase B.5.
+    // Fase B.5 CONSTRUIDA pero APAGADA por flag (default off) → devolvemos la BASE DETERMINISTA (ya
+    // correcta, adaptada a los 4 niveles + línea de datos reales): 0 llamadas a Haiku, 0 costo. Con
+    // el flag OFF el comportamiento en prod NO cambia respecto al MVP.
     //
-    // ── Fase B.5 (pendiente): POST-CHECK EDUCATIVO propio (verificarNudgeIA sobre-filtra la educación:
-    // bloquea peso/grasa/déficit/composición/IMC/obesidad, que son legítimos en marco neutro). B.5 =
-    // permitir esos términos en marco neutro-saludable; bloquear SOLO TCA real (restricción extrema,
-    // purga, ayuno peligroso, culpa, "deja de comer", pérdida peligrosamente rápida, cero-carbos,
-    // ejercicio-castigo); y proteger SOLO las cifras REALES del usuario (permitir cifras ilustrativas).
-    // Cuando exista ese check → encender EDUCACION_IA_ON. ──
+    // El camino de personalización IA (encendido con EDUCACION_IA_ON=1) ya usa: PROMPT ESTRICTO
+    // (redactarPorque, barrera primaria) → esDatoDeSalud (gate incondicional, ya corrió arriba) →
+    // POST-CHECK EDUCATIVO propio (verificarEducacionIA, vía explicarConcepto: permite vocabulario
+    // educativo neutro —peso/grasa/déficit/IMC/composición— y bloquea solo TCA real, protegiendo las
+    // cifras reales) → si descarta / Haiku falla / kill-switch → FALLBACK a la base + reembolso.
+    // Se ENCIENDE (EDUCACION_IA_ON=1) SOLO tras la QA adversarial (Slowking/Nielsen/Karpathy).
     const iaOn = process.env.EDUCACION_IA_ON === '1';
     const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim();
     const anthropic = (iaOn && apiKey) ? new Anthropic({ apiKey }) : null;
@@ -95,17 +94,22 @@ export async function POST(req) {
   }
 }
 
-// Haiku personaliza la base determinista con los datos reales, SIN cambiar el concepto ni inventar
-// cifras. El post-check anti-TCA/peso (verificarNudgeIA, dentro de explicarConcepto) decide si pasa.
+// PROMPT ESTRICTO (barrera PRIMARIA, Fase B.5). Haiku personaliza la base al nivel del usuario; el
+// post-check EDUCATIVO (verificarEducacionIA, dentro de explicarConcepto) es el backstop; si algo se
+// sale del carril → fallback a la base determinista. Marco neutro-saludable; educación ≠ medicina.
 async function redactarPorque({ anthropic, base, nivel }) {
   const system =
-    'Reescribe esta explicación nutricional para un usuario de nivel ' + nivel + '. REGLAS ABSOLUTAS: ' +
-    'NO cambies el concepto ni inventes datos; NO agregues ni cambies cifras (cópialas idénticas); ' +
-    'PROHIBIDO mencionar peso, báscula, culpa o restricción; marco "añadir, no restringir"; ' +
-    'cero consejo médico; máximo 3 frases; español; sin emojis. Devuelve SOLO el texto.';
+    `Eres un coach de nutrición. Reescribe esta explicación educativa para un usuario de nivel ${nivel}, personalizándola y clara.\n` +
+    'REGLAS ABSOLUTAS (si rompes una, fallaste):\n' +
+    '1) Educa el "por qué" con marco SIEMPRE neutro y saludable, "añadir, no restringir".\n' +
+    '2) PRESERVA EXACTAS las cifras del texto base (los números reales del usuario): cópialas idénticas; no las cambies ni las contradigas.\n' +
+    '3) PROHIBIDO promover: restricción extrema, "deja de comer"/saltarse comidas como estrategia, purga/vómito/laxantes, ayuno peligroso, culpa/vergüenza/castigo por comer, pérdida de peso peligrosamente rápida, dietas cero-carbohidratos o cero-grasa como meta, ejercicio como castigo, o demonizar alimentos ("prohibido/malo/pecado/veneno").\n' +
+    '4) SÍ puedes hablar de peso, grasa corporal, déficit/superávit, composición corporal, IMC, calorías y macros en marco neutro-educativo.\n' +
+    '5) CERO consejo médico o diagnóstico; ante condiciones o síntomas, deriva a un profesional de salud.\n' +
+    '6) Máximo 3 frases, español, sin emojis. Devuelve SOLO el texto reescrito.';
   const r = await anthropic.messages.create({
     model: COACH_MODEL,
-    max_tokens: 220,
+    max_tokens: 240,
     system,
     messages: [{ role: 'user', content: base.texto }],
   });
