@@ -4,26 +4,19 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { localDateTime } from '@/lib/coach/context';
 import { esDatoDeSalud } from '@/lib/coach/actions';
-import { explicarConcepto } from '@/lib/coach/educacion';
+import { explicarConcepto, decidirExplicacion } from '@/lib/coach/educacion';
 import { juezEducacionIA } from '@/lib/coach/juezEducacionIA';
-import { EXPLICACIONES, NIVEL_DEFAULT } from '@/lib/coach/curriculum';
+import { NIVEL_DEFAULT } from '@/lib/coach/curriculum';
 
 // Coach · Educación — "¿Por qué?" on-demand (afordance de 1 tap + preguntas de por-qué). Explica al
 // NIVEL del usuario con base DETERMINISTA (curriculum) + personalización Haiku opcional (post-check
-// anti-TCA + fallback). Cifras del motor. Gate de salud reusa esDatoDeSalud → deriva a profesional.
-// Free (Drucker: no cobrar por entender tu salud). Deploy-safe.
+// anti-TCA + fallback). Cifras del motor. Deploy-safe.
+//
+// FIX del bug del '¿Por qué?': un CONCEPTO whitelisteado (afordance del chip) SIEMPRE explica; el guard
+// esDatoDeSalud SOLO corre sobre una PREGUNTA LIBRE del usuario (decidirExplicacion). Antes, la tarjeta
+// mandaba su texto (generado por el modelo) como pregunta libre y el guard se sobre-disparaba → derivaba.
 export const runtime = 'nodejs';
 const COACH_MODEL = 'claude-haiku-4-5';
-
-// Detecta el concepto desde texto libre (o usa el explícito de la afordance).
-function conceptoDe(body) {
-  if (typeof body.concepto === 'string' && EXPLICACIONES[body.concepto]) return body.concepto;
-  const t = String(body.pregunta || '').toLowerCase();
-  if (/(proteina|proteína)/.test(t)) return 'proteina';
-  if (/(deficit|déficit|bajar de grasa|bajar grasa|adelgaz)/.test(t)) return 'deficit';
-  if (/(sello|etiqueta|nom-?051|calidad|ultraprocesad|nutri)/.test(t)) return 'calidad_sin_culpa';
-  return null;
-}
 
 export async function POST(req) {
   try {
@@ -33,18 +26,18 @@ export async function POST(req) {
 
     const body = await req.json().catch(() => ({}));
 
-    // GATE DE SALUD (reuso, no duplico): si la pregunta toca condición/síntoma/alergia → NO damos
-    // contenido clínico; educación general breve + derivar a profesional.
-    if (body.pregunta && esDatoDeSalud(body.pregunta)) {
+    // Rama: concepto whitelisteado → explicar (sin guard). Pregunta libre → guard esDatoDeSalud
+    // (condición/síntoma/alergia → derivar); si no, detectar concepto whitelisteado o 400.
+    const decision = decidirExplicacion(body, { esSalud: esDatoDeSalud });
+    if (decision.accion === 'derivar') {
       return NextResponse.json({
         derivar: true,
         titulo: 'Mejor con un profesional',
         texto: 'Eso toca tu salud y no puedo darte indicaciones clínicas. Te ayudo con hábitos y nutrición general; para tu caso concreto, consúltalo con un profesional de salud.',
       });
     }
-
-    const concepto = conceptoDe(body);
-    if (!concepto) return NextResponse.json({ error: 'no_concepto' }, { status: 400 });
+    if (decision.accion !== 'explicar') return NextResponse.json({ error: 'no_concepto' }, { status: 400 });
+    const concepto = decision.concepto;
 
     const { date } = localDateTime();
     const [{ data: perfil }, { data: targets }, { data: meals }] = await Promise.all([
