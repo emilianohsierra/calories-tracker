@@ -70,7 +70,12 @@ export async function POST(req) {
           anthropic,
           reservar: async () => {
             const { data, error } = await supabase.rpc('consumir_educacion', { p_request_id: rid });
-            if (error) { console.error('consumir_educacion falló:', { code: error.code }); return { allowed: false, reason: 'rpc_error' }; }
+            if (error) {
+              // Diagnóstico: el CODIGO de error de Postgres (no-sensible) identifica la causa exacta
+              // (42883 funcion inexistente/firma, 42703 columna faltante, 42501 permiso, 42P01 tabla…).
+              console.error('consumir_educacion falló:', { code: error.code, message: error.message, details: error.details, hint: error.hint });
+              return { allowed: false, reason: `rpc_error:${error.code || 'x'}` };
+            }
             return data;
           },
           reembolsar: async () => { try { await supabase.rpc('reembolsar_ia', { p_request_id: rid }); } catch { /* noop */ } },
