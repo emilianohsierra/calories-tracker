@@ -83,7 +83,9 @@ export async function POST(req) {
       // Flag off → base determinista SIN reservar ni llamar al modelo (0 gasto).
       : await explicarConcepto({ anthropic: null }, { concepto, nivel, ctx });
     if (!out) return NextResponse.json({ error: 'no_concepto' }, { status: 400 });
-    return NextResponse.json({ titulo: out.titulo, texto: out.texto, nivel: out.nivel });
+    // Indicador NO-sensible de la fuente (sin secretos ni prompt): true = reescritura IA pasó todo el
+    // backstop; false = base determinista (flag off / Free / cap / kill-switch / juez/post-check descartó).
+    return NextResponse.json({ titulo: out.titulo, texto: out.texto, nivel: out.nivel, personalizado: out.via === 'ia' });
   } catch (err) {
     console.error('explicar POST EXCEPCIÓN:', err?.message);
     return NextResponse.json({ error: 'No se pudo explicar' }, { status: 500 });
