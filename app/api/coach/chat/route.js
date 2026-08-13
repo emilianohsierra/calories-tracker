@@ -599,7 +599,12 @@ export async function POST(request) {
 
       // Sin tool_use útil: envolver texto libre como responder (nunca Markdown crudo).
       const text = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
-      if (text) responderInput = { titular: text.slice(0, 280), bloques: [], accion: { label: '', accion: 'ninguna', ref: '' } };
+      if (text) {
+        // A veces el modelo emite el JSON del `responder` como TEXTO en vez de llamar la tool. Si es
+        // así, lo parseamos para renderizar tarjeta (titular+bloques), no las llaves crudas. Si no,
+        // es prosa → va como titular.
+        responderInput = estructuraDeTexto(text) || { titular: text.slice(0, 280), bloques: [], accion: { label: '', accion: 'ninguna', ref: '' } };
+      }
       break;
     }
 
@@ -765,4 +770,25 @@ async function agendarResumen(supabase, anthropic, convId, userId) {
   } catch (e) {
     console.error('[coach/resumen] fallo (no bloquea):', e?.message);
   }
+}
+
+// Si el modelo emitió el payload de `responder` como TEXTO (en vez de llamar la tool), lo recupera
+// como objeto {titular,bloques,accion} para renderizar tarjeta. JSON completo → objeto entero; JSON
+// truncado (max_tokens) → al menos el titular (nunca llaves crudas). null si no es nuestra estructura.
+function estructuraDeTexto(text) {
+  const t = String(text || '').trim();
+  if (!t.startsWith('{') || !t.includes('"titular"')) return null;
+  if (t.endsWith('}')) {
+    try {
+      const o = JSON.parse(t);
+      if (o && typeof o === 'object' && typeof o.titular === 'string') return o;
+    } catch { /* cae al rescate */ }
+  }
+  const m = t.match(/"titular"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (m) {
+    let titular;
+    try { titular = JSON.parse(`"${m[1]}"`); } catch { titular = m[1]; }
+    return { titular, bloques: [], accion: { label: '', accion: 'ninguna', ref: '' } };
+  }
+  return null;
 }
