@@ -13,6 +13,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import CoachOrb from '@/components/coach/CoachOrb';
 import TypingIndicator from '@/components/coach/TypingIndicator';
 import QuickActions from '@/components/coach/QuickActions';
+import RepasoOferta from '@/components/coach/RepasoOferta';
 import Composer from '@/components/coach/Composer';
 import CoachNotifications from '@/components/coach/CoachNotifications';
 import MiAprendizaje from '@/components/coach/MiAprendizaje';
@@ -420,6 +421,9 @@ export default function CoachPage() {
           </div>
         ))}
       </div>
+
+      {/* Oferta ligera de repaso (sólo si hay tema due + back-off lo permite; si no, no renderiza nada). */}
+      {!busy && <RepasoOferta />}
 
       <QuickActions
         visible={!busy}
