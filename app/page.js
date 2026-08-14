@@ -8,6 +8,7 @@ import MealList from '@/components/MealList';
 import AddMealModal from '@/components/AddMealModal';
 import UpgradeModal from '@/components/UpgradeModal';
 import BriefingCard from '@/components/home/BriefingCard';
+import ConsejoDelDia from '@/components/home/ConsejoDelDia';
 import GreetingHeader from '@/components/GreetingHeader';
 import Icon from '@/components/ui/Icon';
 import { addDays, dateLabel, localDateStr } from '@/lib/format';
@@ -207,6 +208,9 @@ export default function Home() {
           </button>
         </div>
       )}
+
+      {/* Consejo del Día (hero) — arriba del contenido, para todos (nuevos → bienvenida). */}
+      <ConsejoDelDia onCta={(cta) => router.push(/receta|despensa/.test(cta?.accion || '') ? '/despensa' : '/coach')} />
 
       {profile && targets ? (
         <>
