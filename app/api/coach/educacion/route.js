@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { localDateTime } from '@/lib/coach/context';
 import { leccionDe, patchQuiz, debeOfrecerLeccion, trasOferta } from '@/lib/coach/educacion';
-import { CONCEPTOS_MVP } from '@/lib/coach/curriculum';
+import { CONCEPTOS_MVP, CONCEPTOS_EXPLICABLES } from '@/lib/coach/curriculum';
 import { esDatoDeSalud } from '@/lib/coach/actions';
-import { programarRepaso, elegirForma, construirItemRepaso, seleccionarDue, TEMAS_REPASO, SRS, sumarDias } from '@/lib/coach/repaso';
+import { readItemsParaMatching } from '@/lib/pantry/db';
+import { filtrarDespensaSegura } from '@/lib/pantry/safety';
+import { programarRepaso, elegirForma, construirItemRepaso, seleccionarDue, TEMAS_REPASO, CATALOGO, SRS, sumarDias } from '@/lib/coach/repaso';
 
 // Coach · Educación — estado + micro-lección + quiz + REPASO ESPACIADO (SM-2). Micro-lecciones =
 // degustación Free (≤ DEGUSTACION_FREE); el REPASO es Free ILIMITADO y $0 (determinista, sin metering).
@@ -13,9 +15,23 @@ export const runtime = 'nodejs';
 const DEGUSTACION_FREE = 3; // Drucker: 2-3 micro-lecciones de degustación para Free.
 const REPASO_ON = process.env.REPASO_ON === '1'; // flag staged: encender el repaso por etapas.
 
-// Temas del repaso que además existen en el curriculum VIVO (huérfanos → ignorados, deploy-safe).
-const TEMAS_VALIDOS = TEMAS_REPASO.filter((t) => CONCEPTOS_MVP.includes(t));
+// Temas del repaso que además existen en el curriculum VIVO (lecciones o explicaciones — 'macros' vive en
+// EXPLICACIONES). Un concepto fuera del curriculum → fila huérfana IGNORADA (deploy-safe).
+const CURRICULUM = new Set([...CONCEPTOS_MVP, ...CONCEPTOS_EXPLICABLES]);
+const TEMAS_VALIDOS = TEMAS_REPASO.filter((t) => CURRICULUM.has(t));
 const diaDelAno = (fecha) => { const d = new Date(`${fecha}T00:00:00Z`); return Math.floor((d - Date.UTC(d.getUTCFullYear(), 0, 0)) / 86400000); };
+
+// Nombre de UN alimento de la despensa SEGURO para nombrar (pasa el filtro de alérgenos, política 'excluir'
+// = no nombra lo incierto — igual que el Consejo). null si no hay ninguno seguro → se omite el contexto.
+async function ingredienteSeguro(supabase, userId) {
+  try {
+    const { data: perfil } = await supabase.from('nutrition_profiles').select('allergies, intolerances').eq('user_id', userId).maybeSingle();
+    const restricciones = [...(perfil?.allergies || []), ...(perfil?.intolerances || [])];
+    const items = await readItemsParaMatching(supabase, userId, 40);
+    const { seguros } = filtrarDespensaSegura(items || [], restricciones, { politicaNoVerificado: 'excluir' });
+    return (seguros || []).map((x) => x.nombre).filter(Boolean)[0] || null;
+  } catch { return null; }
+}
 
 async function estado(supabase, userId) {
   const { data, error } = await supabase.from('education_progress').select('concepto, aciertos, errores').eq('user_id', userId);
@@ -79,8 +95,16 @@ async function armarRepaso(supabase, userId, rows, hoy) {
     prot_consumida: (meals && meals.length) ? Math.round(protConsumida) : null,
     prot_meta: targets?.protein_g ? Math.round(targets.protein_g) : null,
     kcal_meta: targets?.kcal_target ? Math.round(targets.kcal_target) : null,
+    // carb_meta: nutrition_targets no expone carbohidratos hoy → slot ausente → el contexto de macros v2 se
+    // omite (pregunta conceptual sola). Se cablea cuando exista la columna de macros del motor.
   };
   const forma = elegirForma(sel.concepto, diaDelAno(hoy), fila.ultima_forma_explicada || null);
+  if (!forma) return null;
+  // Slot {{ingrediente}} (calidad_sin_culpa v1): SOLO desde la despensa filtrada por alérgenos. Si no hay
+  // uno seguro → queda null → construirItemRepaso omite el contexto (NUNCA nombra un alimento sin filtrar).
+  if (forma.contexto && /\{\{ingrediente\}\}/.test(forma.contexto)) {
+    slots.ingrediente = await ingredienteSeguro(supabase, userId);
+  }
   const item = construirItemRepaso(sel.concepto, forma, slots);
   if (!item) return null;
   // Cinturón: el contenido es fijo/QA'd, pero reusamos el guard vivo como belt-and-suspenders.
@@ -140,9 +164,11 @@ export async function POST(req) {
       return NextResponse.json({ ok: true, ofrecer: debeOfrecerLeccion(nuevas) });
     }
 
-    // El resto de acciones requieren un concepto del curriculum vivo.
+    // El resto de acciones requieren un concepto válido. 'repaso' admite cualquier tema del curriculum
+    // (incluye 'macros'); 'quiz'/'leccion' solo los que tienen micro-lección (CONCEPTOS_MVP).
     const concepto = String(body.concepto || '');
-    if (!CONCEPTOS_MVP.includes(concepto)) return NextResponse.json({ error: 'no_concepto' }, { status: 400 });
+    const conceptosValidos = body.accion === 'repaso' ? TEMAS_VALIDOS : CONCEPTOS_MVP;
+    if (!conceptosValidos.includes(concepto)) return NextResponse.json({ error: 'no_concepto' }, { status: 400 });
 
     // ── accion 'repaso': SM-2 determinista ($0). Reprograma next_review + estado; re-enseña con otra forma en fallo. ──
     if (body.accion === 'repaso') {
