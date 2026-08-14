@@ -19,9 +19,8 @@ export default function ConsejoDelDia({ onCta }) {
     return () => { vivo = false; };
   }, []);
 
-  if (consejo === undefined) return <ConsejoSkeleton />;
-
-  const esRacha = consejo.foco === 'racha' || consejo.foco === 'progreso';
+  const cargando = consejo === undefined;
+  const esRacha = !cargando && (consejo.foco === 'racha' || consejo.foco === 'progreso');
   const compartir = async () => {
     setSharing(true); setShareMsg('');
     const r = await compartirConsejo({ titulo: consejo.titulo, cuerpo: consejo.cuerpo, foco: consejo.foco });
@@ -30,51 +29,51 @@ export default function ConsejoDelDia({ onCta }) {
     else if (r.motivo === 'descarga') setShareMsg('Imagen guardada para compartir.');
   };
 
+  // M3: contenedor ESTABLE con aria-live → al pasar de skeleton a contenido, el lector lo anuncia.
   return (
     <section
       aria-label="Consejo del día"
+      aria-live="polite"
+      aria-busy={cargando}
       className="card"
-      style={{ background: 'linear-gradient(135deg, var(--brand-tint), var(--surface))', border: '1px solid var(--border)', boxShadow: 'var(--shadow-1)' }}
+      style={{ background: 'linear-gradient(135deg, var(--brand-tint), var(--surface))', border: '1px solid var(--border)', boxShadow: 'var(--shadow-1)', opacity: cargando ? 0.75 : 1 }}
     >
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--brand-strong)', fontSize: 12, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase' }}>
-        <Icon name={esRacha ? 'flame' : 'sparkles'} size={14} /> {esRacha ? 'Tu racha' : 'Consejo de hoy'}
-      </div>
-
-      <h2 className="c-title" style={{ fontSize: 20, lineHeight: '26px', margin: 'var(--s2) 0 var(--s1)' }}>{consejo.titulo}</h2>
-      {consejo.cuerpo && <p className="c-body" style={{ margin: 0, color: 'var(--text)' }}>{consejo.cuerpo}</p>}
-
-      {consejo.dato_motor?.label != null && consejo.dato_motor?.valor != null && (
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 'var(--s3)', padding: '4px 10px', borderRadius: 'var(--r-pill)', background: 'var(--surface)', border: '1px solid var(--border)', fontSize: 13 }}>
-          <span style={{ color: 'var(--text-2)' }}>{consejo.dato_motor.label}:</span>
-          <span className="num" style={{ fontWeight: 700, color: 'var(--text)' }}>{consejo.dato_motor.valor}</span>
+      {cargando ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s2)' }}>
+          {['40%', '80%', '90%'].map((w) => (
+            <div key={w} style={{ height: 14, width: w, borderRadius: 'var(--r-sm)', background: 'var(--surface-2)' }} />
+          ))}
         </div>
+      ) : (
+        <>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--brand-strong)', fontSize: 12, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase' }}>
+            <Icon name={esRacha ? 'flame' : 'sparkles'} size={14} /> {esRacha ? 'Tu racha' : 'Consejo de hoy'}
+          </div>
+
+          <h2 className="c-title" style={{ fontSize: 20, lineHeight: '26px', margin: 'var(--s2) 0 var(--s1)' }}>{consejo.titulo}</h2>
+          {consejo.cuerpo && <p className="c-body" style={{ margin: 0, color: 'var(--text)' }}>{consejo.cuerpo}</p>}
+
+          {consejo.dato_motor?.label != null && consejo.dato_motor?.valor != null && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 'var(--s3)', padding: '4px 10px', borderRadius: 'var(--r-pill)', background: 'var(--surface)', border: '1px solid var(--border)', fontSize: 13 }}>
+              <span style={{ color: 'var(--text-2)' }}>{consejo.dato_motor.label}:</span>
+              <span className="num" style={{ fontWeight: 700, color: 'var(--text)' }}>{consejo.dato_motor.valor}</span>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--s2)', marginTop: 'var(--s4)' }}>
+            {consejo.cta?.label && (
+              <button type="button" className="btn btn-primary" onClick={() => onCta?.(consejo.cta)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 'var(--touch)' }}>
+                {consejo.cta.label}
+              </button>
+            )}
+            <button type="button" className="btn btn-ghost" onClick={compartir} disabled={sharing} aria-label="Compartir el consejo de hoy" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 'var(--touch)' }}>
+              <Icon name="arrowUp" size={16} /> {sharing ? 'Preparando…' : 'Compartir'}
+            </button>
+          </div>
+
+          {shareMsg && <div role="status" aria-live="polite" className="c-subtitle" style={{ marginTop: 'var(--s2)' }}>{shareMsg}</div>}
+        </>
       )}
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--s2)', marginTop: 'var(--s4)' }}>
-        {consejo.cta?.label && (
-          <button type="button" className="btn btn-primary" onClick={() => onCta?.(consejo.cta)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            {consejo.cta.label}
-          </button>
-        )}
-        <button type="button" className="btn btn-ghost" onClick={compartir} disabled={sharing} aria-label="Compartir el consejo de hoy" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minHeight: 'var(--touch)' }}>
-          <Icon name="arrowUp" size={16} /> {sharing ? 'Preparando…' : 'Compartir'}
-        </button>
-      </div>
-
-      {shareMsg && <div role="status" aria-live="polite" className="c-subtitle" style={{ marginTop: 'var(--s2)' }}>{shareMsg}</div>}
-    </section>
-  );
-}
-
-function ConsejoSkeleton() {
-  const bar = (w) => <div style={{ height: 14, width: w, borderRadius: 'var(--r-sm)', background: 'var(--surface-2)' }} />;
-  return (
-    <section className="card" aria-busy="true" aria-label="Cargando el consejo del día" style={{ background: 'linear-gradient(135deg, var(--brand-tint), var(--surface))', border: '1px solid var(--border)', opacity: 0.75 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s2)' }}>
-        {bar('40%')}
-        {bar('80%')}
-        {bar('90%')}
-      </div>
     </section>
   );
 }
