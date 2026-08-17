@@ -730,6 +730,7 @@ export async function POST(request) {
 // Historial Fase A · cablea el resumen progresivo (lib/coach/summarize) con Supabase + Haiku.
 // Metering: consumir_resumen (feature 'resumen') + reembolsar_ia (genérico). Deploy-safe: sin la
 // tabla/RPC/IA → mantenerResumen degrada a skip (solo-cola), nunca lanza.
+const RESUMEN_LECTURA_MAX = 200; // #4a: cota de filas al leer el hilo para el resumen (>> ventana 14 + overflow)
 async function agendarResumen(supabase, anthropic, convId, userId) {
   if (!anthropic || !supabase) return;
   const rid = crypto.randomUUID();
@@ -744,11 +745,16 @@ async function agendarResumen(supabase, anthropic, convId, userId) {
   try {
     const res = await mantenerResumen({
       leerMensajes: async () => {
+        // #4a robustez: acota la lectura. El resumen solo necesita la ventana reciente (14) + el backlog
+        // de overflow; traer TODO el hilo en conversaciones larguísimas cargaba demasiadas filas. Traemos
+        // los N MÁS RECIENTES (desc+limit) y reinvertimos a orden cronológico (ASC) para el resumidor. Si
+        // el watermark (upto) queda fuera de esta ventana, seleccionarDelta lo trata como inválido y se
+        // re-ancla en el siguiente turno (fallback graceful, #4b).
         const { data } = await supabase
           .from('coach_messages').select('id, role, content')
           .eq('conversation_id', convId).in('role', ['user', 'assistant'])
-          .order('created_at', { ascending: true });
-        return data || [];
+          .order('created_at', { ascending: false }).limit(RESUMEN_LECTURA_MAX);
+        return (data || []).reverse();
       },
       leerUpto: async () => (await leerSum()).upto_message_id || null,
       leerResumen: async () => (await leerSum()).summary || '',

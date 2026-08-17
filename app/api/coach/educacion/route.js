@@ -87,7 +87,7 @@ async function armarRepaso(supabase, userId, rows, hoy) {
   if (!sel) return null;
   const fila = (rows || []).find((r) => r.concepto === sel.concepto) || {};
   const [{ data: targets }, { data: meals }] = await Promise.all([
-    supabase.from('nutrition_targets').select('kcal_target, protein_g').eq('user_id', userId).maybeSingle(),
+    supabase.from('nutrition_targets').select('kcal_target, protein_g, carbs_g').eq('user_id', userId).maybeSingle(),
     supabase.from('meals').select('protein_g').eq('user_id', userId).eq('date', hoy),
   ]);
   const protConsumida = (meals || []).reduce((a, m) => a + (m.protein_g || 0), 0);
@@ -95,8 +95,7 @@ async function armarRepaso(supabase, userId, rows, hoy) {
     prot_consumida: (meals && meals.length) ? Math.round(protConsumida) : null,
     prot_meta: targets?.protein_g ? Math.round(targets.protein_g) : null,
     kcal_meta: targets?.kcal_target ? Math.round(targets.kcal_target) : null,
-    // carb_meta: nutrition_targets no expone carbohidratos hoy → slot ausente → el contexto de macros v2 se
-    // omite (pregunta conceptual sola). Se cablea cuando exista la columna de macros del motor.
+    carb_meta: targets?.carbs_g ? Math.round(targets.carbs_g) : null, // macros v2 (del motor; sin dato → contexto omitido)
   };
   const forma = elegirForma(sel.concepto, diaDelAno(hoy), fila.ultima_forma_explicada || null);
   if (!forma) return null;
@@ -219,12 +218,15 @@ export async function POST(req) {
     }
 
     const [{ data: targets }, { data: meals }] = await Promise.all([
-      supabase.from('nutrition_targets').select('kcal_target, protein_g').eq('user_id', user.id).maybeSingle(),
+      supabase.from('nutrition_targets').select('kcal_target, protein_g, carbs_g, fat_g').eq('user_id', user.id).maybeSingle(),
       supabase.from('meals').select('protein_g').eq('user_id', user.id).eq('date', hoy),
     ]);
     const protConsumida = (meals || []).reduce((a, m) => a + (m.protein_g || 0), 0);
     const lec = leccionDe(concepto);
-    const cuerpo = lec.cuerpo({ protConsumida, protObjetivo: targets?.protein_g, kcalObjetivo: targets?.kcal_target });
+    const cuerpo = lec.cuerpo({
+      protConsumida, protObjetivo: targets?.protein_g, kcalObjetivo: targets?.kcal_target,
+      carbObjetivo: targets?.carbs_g, grasObjetivo: targets?.fat_g, // macros: metas del motor (nunca inventa)
+    });
 
     // Marca 'visto' (idempotente por concepto).
     await supabase.from('education_progress').upsert(
