@@ -152,7 +152,7 @@ export default function CoachPage() {
       }
       const pw = readPaywall(res.status, data);
       if (pw) { setMessages((m) => m.slice(0, -1)); setPaywall(pw); return; }
-      const opciones = data.opciones || data.options || data.platillos || [];
+      const opciones = data.opciones || data.options || []; // catálogo v2 viene en data.opciones + data.fuente='catalogo'
       if (res.ok && opciones.length === 0) {
         // Feature A / usuario nuevo o despensa vacía → invitación cálida ("dime tu objetivo"), NO error.
         setLastBubble({ empty: true, mensaje: data.mensaje || 'Dime tu objetivo y te digo qué comer hoy.' });

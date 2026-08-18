@@ -13,10 +13,18 @@ import { PROCEDENCIA_TO_CONFIDENCE } from '@/lib/pantry/constants';
 export default function OptionCard({ option, onRegister }) {
   const [state, setState] = useState('idle'); // idle | saving | done
   const { titulo, kcal = 0, macros = {}, usa_n_despensa = 0, procedencia = 'estimado', cuadre = {}, items = [] } = option || {};
-  // Recomendaciones v2: `porque` (por qué encaja) + `estimado` (macros aproximados → prefijo '~').
+  // Recomendaciones v2: `porque` (por qué encaja) + `estimado` (macros aproximados → prefijo '~')
+  // + `rangos` (catálogo: { kcal:[min,max], prot, carb, gras, fibra }). Todo del backend.
   const porque = option?.porque || option?.por_que || '';
   const estimado = option?.estimado === true || procedencia === 'estimado';
   const aprox = estimado ? '~' : '';
+  const rangos = option?.rangos || null;
+  // Muestra un rango "min–max" si el backend lo manda; si no, el valor con prefijo '~' cuando es estimado.
+  const fmt = (val, r) => {
+    if (Array.isArray(r) && r.length === 2) return `~${Math.round(r[0])}–${Math.round(r[1])}`;
+    if (typeof r === 'number') return `${aprox}${Math.round(r)}`;
+    return `${aprox}${Math.round(val || 0)}`;
+  };
 
   const register = async () => {
     if (state !== 'idle' || !onRegister) return;
@@ -41,10 +49,10 @@ export default function OptionCard({ option, onRegister }) {
       {porque && <div className="c-subtitle" style={{ color: 'var(--text-2)' }}>{porque}</div>}
 
       <div className="macro-row">
-        <span className="macro-chip num"><i className="macro-dot" style={{ background: 'var(--brand)' }} />{aprox}{Math.round(kcal)} kcal</span>
-        <span className="macro-chip num"><i className="macro-dot" style={{ background: 'var(--protein)' }} />{aprox}{Math.round(macros.prot || 0)} g P</span>
-        <span className="macro-chip num"><i className="macro-dot" style={{ background: 'var(--carbs)' }} />{aprox}{Math.round(macros.carb || 0)} g C</span>
-        <span className="macro-chip num"><i className="macro-dot" style={{ background: 'var(--fat)' }} />{aprox}{Math.round(macros.gras || 0)} g G</span>
+        <span className="macro-chip num"><i className="macro-dot" style={{ background: 'var(--brand)' }} />{fmt(kcal, rangos?.kcal)} kcal</span>
+        <span className="macro-chip num"><i className="macro-dot" style={{ background: 'var(--protein)' }} />{fmt(macros.prot, rangos?.prot)} g P</span>
+        <span className="macro-chip num"><i className="macro-dot" style={{ background: 'var(--carbs)' }} />{fmt(macros.carb, rangos?.carb)} g C</span>
+        <span className="macro-chip num"><i className="macro-dot" style={{ background: 'var(--fat)' }} />{fmt(macros.gras, rangos?.gras)} g G</span>
       </div>
       {estimado && <div className="ring-caption" style={{ color: 'var(--text-3)' }}>Macros estimados</div>}
 
