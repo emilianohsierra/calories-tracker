@@ -386,8 +386,8 @@ export default function CoachPage() {
               <div className="coach-msg">
                 <div className="coach-titular">{m.mensaje || 'Dime tu objetivo y te digo qué comer hoy.'}</div>
                 <div className="c-card__actions" style={{ flexWrap: 'wrap' }}>
-                  <button type="button" className="btn btn-primary" onClick={() => router.push('/perfil')}>Armar mi plan</button>
-                  <button type="button" className="btn btn-ghost" onClick={() => router.push('/despensa')}>Agregar a mi despensa</button>
+                  <button type="button" className="btn btn-primary" onClick={() => router.push('/perfil')} style={{ minHeight: 'var(--touch)' }}>Armar mi plan</button>
+                  <button type="button" className="btn btn-ghost" onClick={() => router.push('/despensa')} style={{ minHeight: 'var(--touch)' }}>Agregar a mi despensa</button>
                 </div>
               </div>
             ) : m.proposal ? (

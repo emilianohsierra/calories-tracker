@@ -40,7 +40,7 @@ export default function SwapCard() {
           </p>
           {swap.razon && <p className="c-subtitle" style={{ margin: '0 0 var(--s3)', color: 'var(--text-2)' }}>{swap.razon}</p>}
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s3)' }}>
-            <button type="button" className="btn btn-primary" onClick={meInteresa} style={{ padding: '6px 14px' }}>Me interesa</button>
+            <button type="button" className="btn btn-primary" onClick={meInteresa} style={{ padding: '6px 14px', minHeight: 'var(--touch)' }}>Me interesa</button>
             <button type="button" className="link-btn" onClick={ahoraNo} aria-label="Ahora no" style={{ minHeight: 'var(--touch)' }}>Ahora no</button>
           </div>
         </>
