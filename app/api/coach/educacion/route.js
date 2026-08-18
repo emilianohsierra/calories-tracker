@@ -7,6 +7,8 @@ import { esDatoDeSalud } from '@/lib/coach/actions';
 import { readItemsParaMatching } from '@/lib/pantry/db';
 import { filtrarDespensaSegura } from '@/lib/pantry/safety';
 import { programarRepaso, elegirForma, construirItemRepaso, seleccionarDue, TEMAS_REPASO, CATALOGO, SRS, sumarDias } from '@/lib/coach/repaso';
+import { otorgar as otorgarGam } from '@/lib/gamification/otorgar';
+import { EVENTOS as EVENTOS_GAM } from '@/lib/gamification/eventos';
 
 // Coach · Educación — estado + micro-lección + quiz + REPASO ESPACIADO (SM-2). Micro-lecciones =
 // degustación Free (≤ DEGUSTACION_FREE); el REPASO es Free ILIMITADO y $0 (determinista, sin metering).
@@ -234,6 +236,7 @@ export async function POST(req) {
       { onConflict: 'user_id,concepto', ignoreDuplicates: false },
     );
     await sembrarSiNuevo(supabase, user.id, concepto, hoy); // entra al ciclo de repaso (best-effort)
+    await otorgarGam(supabase, EVENTOS_GAM.LESSON_COMPLETED, concepto); // XP 1×/concepto (best-effort, gated)
     return NextResponse.json({ titulo: lec.titulo, cuerpo, quiz: lec.quiz, concepto });
   } catch (err) {
     console.error('educacion POST EXCEPCIÓN:', err?.message);

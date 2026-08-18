@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getDefaultPantry, readItems, toClientItem, firmarImagen } from '@/lib/pantry/db';
 import { cantidadValida } from '@/lib/pantry/text';
+import { otorgar } from '@/lib/gamification/otorgar';
+import { EVENTOS } from '@/lib/gamification/eventos';
 
 export const runtime = 'nodejs';
 
@@ -71,6 +73,9 @@ export async function POST(request) {
     console.error('pantry POST:', { code: error.code, details: error.details, message: error.message }); // Item 10: code/details, no solo message
     return NextResponse.json({ error: 'No se pudo agregar a la despensa' }, { status: 500 });
   }
+  // Gamificación V1 (best-effort, no bloquea; idempotente por item_id; gated GAMIFICACION_ON).
+  await otorgar(supabase, EVENTOS.PANTRY_ITEM_ADDED, data.id);
+
   const item = toClientItem(data);
   item.image_url = await firmarImagen(supabase, data.imagen); // path de storage → URL firmada
   return NextResponse.json({ item }, { status: 201 });

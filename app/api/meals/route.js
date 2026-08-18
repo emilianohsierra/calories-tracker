@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { validateMeal } from '@/lib/meals/insert';
+import { otorgar } from '@/lib/gamification/otorgar';
+import { EVENTOS } from '@/lib/gamification/eventos';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -88,6 +90,9 @@ export async function POST(request) {
     console.error('Error al guardar meal:', error);
     return NextResponse.json({ error: 'No se pudo guardar el platillo' }, { status: 500 });
   }
+
+  // Gamificación V1 (best-effort, no bloquea el registro; idempotente por meal_id; gated GAMIFICACION_ON).
+  await otorgar(supabase, EVENTOS.MEAL_LOGGED, data.id);
 
   return NextResponse.json({ id: data.id }, { status: 201 });
 }
