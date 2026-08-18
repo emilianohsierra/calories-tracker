@@ -9,6 +9,7 @@ import AddMealModal from '@/components/AddMealModal';
 import UpgradeModal from '@/components/UpgradeModal';
 import BriefingCard from '@/components/home/BriefingCard';
 import ConsejoDelDia from '@/components/home/ConsejoDelDia';
+import HoySection from '@/components/home/HoySection';
 import GreetingHeader from '@/components/GreetingHeader';
 import Icon from '@/components/ui/Icon';
 import { addDays, dateLabel, localDateStr } from '@/lib/format';
@@ -214,6 +215,16 @@ export default function Home() {
 
       {profile && targets ? (
         <>
+          {/* Gamificación V1 · "HOY" como centro (degrada a null si el flag/back no trae datos). */}
+          <HoySection
+            onAccion={(a) => {
+              if (a?.ruta) return router.push(a.ruta);
+              const act = a?.accion || a;
+              if (act === 'registrar') return cameraInputRef.current?.click();
+              if (act === 'objetivo') return router.push('/onboarding');
+              return router.push('/coach');
+            }}
+          />
           <button type="button" className="coach-entry" onClick={() => router.push('/coach')}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               <Icon name="message" size={18} /> Habla con Mi Coach
