@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { readItemsParaMatching } from '@/lib/pantry/db';
 import { quePuedoComer } from '@/lib/pantry/suggest';
+import { seleccionarPlatillos } from '@/lib/coach/platillos';
 import { localDateTime } from '@/lib/coach/context';
 import { limitPayload } from '@/lib/paywall';
 import { nextResetLabel } from '@/lib/usage';
@@ -68,17 +69,23 @@ export async function POST() {
     const opciones = quePuedoComer(pendientes, pantryItems, objetivo, restricciones, { hoy: date, max: 3 });
 
     if (!opciones || !opciones.length) {
-      // Sin opciones (despensa vacía o nada seguro cuadra) → no cobrar el cap: reembolsar.
+      // Sin opciones de despensa → FALLBACK a platillos MX del catálogo (determinista, $0). Reembolsa el
+      // cap (no es un reco de despensa) y sirve platillos GRATIS. A2-IA fuera del MVP (flag PLATILLOS_IA_ON).
       await safeRpc(supabase, 'reembolsar_ia', { p_request_id: requestId });
       requestId = null;
+      const platillos = seleccionarPlatillos(pendientes, objetivo, restricciones, { max: 3 });
+      if (platillos.length) {
+        return NextResponse.json({ opciones: platillos, fuente: 'catalogo', mensaje: 'Ideas para hoy que encajan con lo que te falta:' });
+      }
       const mensaje = pantryItems.length
         ? 'Con lo que tienes en la despensa no encontré algo que cuadre y sea seguro. Agrega algo o dime qué tienes.'
-        : 'Tu despensa está vacía. Agrega lo que tienes en casa y te digo qué puedes comer.';
-      return NextResponse.json({ opciones: [], mensaje });
+        : 'Aún no tengo con qué armarte una idea. Cuéntame qué tienes o registra tu meta.';
+      return NextResponse.json({ opciones: [], fuente: 'catalogo', mensaje });
     }
 
     requestId = null;
-    return NextResponse.json({ opciones, remaining: gate.remaining ?? null });
+    const conFuente = opciones.map((o) => ({ ...o, fuente: 'despensa' }));
+    return NextResponse.json({ opciones: conFuente, fuente: 'despensa', remaining: gate.remaining ?? null });
   } catch (err) {
     console.error('que-puedo-comer EXCEPCION:', err?.message);
     if (supabase && requestId) await safeRpc(supabase, 'reembolsar_ia', { p_request_id: requestId });
