@@ -63,23 +63,22 @@ begin
     execute format('revoke all on public.%I from anon', t);
     execute format('grant select on public.%I to authenticated', t);
   end loop;
-  -- Escrituras del CLIENTE permitidas donde el usuario marca completitud (logros/objetivos/rachas se
-  -- otorgan vía RPC o cron; user_achievements/daily_goals aceptan insert-own para el path in-request).
+  -- HARDENING (Slowking): NINGUNA de las 5 tablas acepta insert/update del CLIENTE (solo SELECT-own). Los
+  -- desbloqueos de logro / completitud de objetivo / XP / racha se escriben SOLO vía la RPC (SECURITY
+  -- DEFINER, validada) o el cron (service_role, estado calculado server-side). Así un cron futuro NUNCA
+  -- puede leer un user_achievements/daily_goals FABRICADO por el cliente como input de XP (lavado de farmeo).
   execute 'drop policy if exists user_achievements_ins on public.user_achievements';
-  execute 'create policy user_achievements_ins on public.user_achievements for insert to authenticated with check (user_id = (select auth.uid()))';
   execute 'drop policy if exists daily_goals_ins on public.daily_goals';
-  execute 'create policy daily_goals_ins on public.daily_goals for insert to authenticated with check (user_id = (select auth.uid()))';
-  execute 'grant insert on public.user_achievements to authenticated';
-  execute 'grant insert on public.daily_goals to authenticated';
 end $$;
--- gamification_events y user_progress: SIN grant de insert/update a authenticated → solo la RPC (SECURITY
--- DEFINER) y el service_role (cron) los escriben. Evita que un cliente inyecte XP directo.
+-- gamification_events / user_progress / user_achievements / daily_goals / user_streaks: SIN grant de
+-- insert/update a authenticated → solo la RPC (SECURITY DEFINER) y el service_role (cron) escriben.
 
 -- ============================ RPC otorgar_evento (atómica, idempotente, anti-farmeo) ============================
 -- Authenticated → usa auth.uid() y VALIDA que la acción referida exista (no farmeable). service_role (cron,
 -- auth.uid() null) → usa p_user_id para eventos estado-derivados (racha/día/semana), sin validar (confiable).
+-- p_xp queda por retrocompatibilidad de firma pero se IGNORA: el XP se deriva server-side (no farmeable).
 create or replace function public.otorgar_evento(
-  p_tipo text, p_clave_dedupe text, p_xp int, p_user_id uuid default null
+  p_tipo text, p_clave_dedupe text, p_xp int default 0, p_user_id uuid default null
 ) returns jsonb
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -104,7 +103,21 @@ begin
     if not v_valido then return jsonb_build_object('awarded', false, 'reason', 'invalid'); end if;
   end if;
 
-  v_xp := greatest(0, coalesce(p_xp, 0));
+  -- XP DERIVADO SERVER-SIDE por tipo (Slowking: el p_xp del cliente NO se usa → un usuario no puede inflar
+  -- su XP llamando la RPC directo). Alineado con lib/gamification/config.js XP; si difieren, gana la RPC
+  -- (server-trusted, fuente de la verdad para la economía).
+  v_xp := case p_tipo
+    when 'MEAL_LOGGED'       then 10
+    when 'PANTRY_ITEM_ADDED' then 5
+    when 'LESSON_COMPLETED'  then 25
+    when 'WORKOUT_LOGGED'    then 15
+    when 'CHECKIN_COMPLETED' then 5
+    when 'DAY_COMPLETED'     then 20
+    when 'GOAL_REACHED'      then 30
+    when 'WEEKLY_CONSISTENT' then 100
+    else 0
+  end;
+  if v_xp = 0 then return jsonb_build_object('awarded', false, 'reason', 'tipo_sin_xp'); end if;
 
   -- LEDGER idempotente: si ya existía (replay) → no otorga.
   insert into public.gamification_events (user_id, tipo, clave_dedupe, xp)
