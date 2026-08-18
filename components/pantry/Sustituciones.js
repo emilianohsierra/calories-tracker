@@ -8,14 +8,24 @@ import { getSustituciones } from '@/lib/pantry/sustitucionesClient';
 // endpoint de sustituciones del CTO (que ya filtra alérgenos). La UI NO inventa: nombre/razón/
 // nutri-score/sellos/disponibilidad vienen del backend. Estados: loading, vacío honesto, y degrade
 // (si el endpoint falla → no renderiza nada, la ficha no se rompe). Consistente con el coach.
-const NUTRI_COLOR = { a: 'var(--ok)', b: 'var(--fiber)', c: 'var(--warn-c)', d: 'var(--carbs)', e: 'var(--over)' };
+// Paleta OFICIAL de Nutri-Score (colores FIJOS, no tokens de tema) con su color de texto por letra
+// que cumple WCAG AA 4.5:1 sobre cada fondo, en light y dark (Nielsen M1). A/E llevan blanco (fondo
+// verde oscuro / rojo); B/C/D llevan texto oscuro (fondos claros). Fijos → contraste determinista.
+const NUTRI = {
+  a: { bg: '#038141', fg: '#ffffff' },
+  b: { bg: '#85bb2f', fg: '#14161a' },
+  c: { bg: '#fecb02', fg: '#14161a' },
+  d: { bg: '#ee8100', fg: '#14161a' },
+  e: { bg: '#e63e11', fg: '#ffffff' },
+};
 
 function NutriBadge({ score }) {
   const s = String(score || '').toLowerCase();
-  if (!NUTRI_COLOR[s]) return null;
+  const c = NUTRI[s];
+  if (!c) return null;
   return (
     <span role="img" aria-label={`Nutri-Score ${s.toUpperCase()}`} title={`Nutri-Score ${s.toUpperCase()}`}
-      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 'var(--r-sm)', background: NUTRI_COLOR[s], color: '#fff', fontSize: 12, fontWeight: 800, flexShrink: 0 }}>
+      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 'var(--r-sm)', background: c.bg, color: c.fg, fontSize: 12, fontWeight: 800, flexShrink: 0 }}>
       {s.toUpperCase()}
     </span>
   );
