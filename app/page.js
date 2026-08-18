@@ -220,6 +220,13 @@ export default function Home() {
             </span>
             <span aria-hidden="true" style={{ display: 'inline-flex', color: 'var(--text-3)' }}><Icon name="chevronRight" size={18} /></span>
           </button>
+          {/* Recomendaciones v2 (Feature A): quick action → abre el coach y dispara la reco. */}
+          <button type="button" className="coach-entry" onClick={() => router.push('/coach?reco=1')} style={{ marginTop: 'calc(-1 * var(--s2))' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <Icon name="utensils" size={18} /> ¿Qué como hoy?
+            </span>
+            <span aria-hidden="true" style={{ display: 'inline-flex', color: 'var(--text-3)' }}><Icon name="chevronRight" size={18} /></span>
+          </button>
           <button type="button" className="coach-entry" onClick={() => router.push('/despensa')} style={{ marginTop: 'calc(-1 * var(--s2))' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               <Icon name="box" size={18} /> Mi despensa

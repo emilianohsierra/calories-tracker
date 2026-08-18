@@ -14,6 +14,7 @@ import CoachOrb from '@/components/coach/CoachOrb';
 import TypingIndicator from '@/components/coach/TypingIndicator';
 import QuickActions from '@/components/coach/QuickActions';
 import RepasoOferta from '@/components/coach/RepasoOferta';
+import SwapCard from '@/components/coach/SwapCard';
 import Composer from '@/components/coach/Composer';
 import CoachNotifications from '@/components/coach/CoachNotifications';
 import MiAprendizaje from '@/components/coach/MiAprendizaje';
@@ -151,14 +152,15 @@ export default function CoachPage() {
       }
       const pw = readPaywall(res.status, data);
       if (pw) { setMessages((m) => m.slice(0, -1)); setPaywall(pw); return; }
-      const opciones = data.opciones || data.options || [];
+      const opciones = data.opciones || data.options || data.platillos || [];
       if (res.ok && opciones.length === 0) {
-        // N-I2: despensa vacía / nada seguro cuadra → mensaje ÚTIL + CTA a agregar, NO un error falso.
-        setLastBubble({ empty: true, mensaje: data.mensaje || 'Con lo que tienes no encontré algo seguro que cuadre. Agrega productos a tu despensa.' });
+        // Feature A / usuario nuevo o despensa vacía → invitación cálida ("dime tu objetivo"), NO error.
+        setLastBubble({ empty: true, mensaje: data.mensaje || 'Dime tu objetivo y te digo qué comer hoy.' });
         return;
       }
       if (!res.ok) { setLastBubble({ error: true, retryReco: true, diag: data.error || 'sin opciones' }); return; }
-      setLastBubble({ options: opciones });
+      // fuente: 'despensa' (con lo que tienes) | 'catalogo' (ideas para hoy). Default 'despensa' (compat).
+      setLastBubble({ options: opciones, fuente: data.fuente || 'despensa' });
     } catch (e) {
       console.error('que-puedo-comer fail:', e);
       setLastBubble({ error: true, retryReco: true, diag: String(e?.message || e) });
@@ -172,6 +174,14 @@ export default function CoachPage() {
     setMessages((m) => [...m, { role: 'user', content: '¿Qué puedo comer?' }, { role: 'assistant', content: '' }]);
     doReco();
   };
+
+  // Quick action "¿Qué como hoy?" desde HOME → /coach?reco=1 dispara la reco una vez al abrir.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('reco') === '1') {
+      requestQuePuedoComer();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const retry = () => {
     if (busy) return;
@@ -365,16 +375,19 @@ export default function CoachPage() {
               </div>
             ) : m.options ? (
               <div className="coach-msg">
-                <div className="coach-titular">Con lo que tienes y tu meta de hoy:</div>
+                {/* Recomendaciones v2: encabezado por FUENTE (despensa vs catálogo). */}
+                <div className="coach-titular">{m.fuente === 'catalogo' ? 'Ideas para hoy' : 'Con lo que tienes'}</div>
                 {m.options.map((op, k) => (
                   <OptionCard key={k} option={op} onRegister={m.fromHistory ? undefined : onRegisterOption} />
                 ))}
               </div>
             ) : m.empty ? (
+              // Feature A / usuario nuevo o despensa vacía: NO callejón — invitación + salidas útiles.
               <div className="coach-msg">
-                <div className="coach-titular">{m.mensaje}</div>
-                <div className="c-card__actions">
-                  <button type="button" className="btn btn-primary" onClick={() => router.push('/despensa')}>Agregar a mi despensa</button>
+                <div className="coach-titular">{m.mensaje || 'Dime tu objetivo y te digo qué comer hoy.'}</div>
+                <div className="c-card__actions" style={{ flexWrap: 'wrap' }}>
+                  <button type="button" className="btn btn-primary" onClick={() => router.push('/perfil')}>Armar mi plan</button>
+                  <button type="button" className="btn btn-ghost" onClick={() => router.push('/despensa')}>Agregar a mi despensa</button>
                 </div>
               </div>
             ) : m.proposal ? (
@@ -421,6 +434,9 @@ export default function CoachPage() {
           </div>
         ))}
       </div>
+
+      {/* Feature B: swap proactivo suave (sólo si el backend lo ofrece + back-off; si no, nada). */}
+      {!busy && <SwapCard />}
 
       {/* Oferta ligera de repaso (sólo si hay tema due + back-off lo permite; si no, no renderiza nada). */}
       {!busy && <RepasoOferta />}

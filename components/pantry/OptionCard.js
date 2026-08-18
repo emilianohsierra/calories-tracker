@@ -13,6 +13,10 @@ import { PROCEDENCIA_TO_CONFIDENCE } from '@/lib/pantry/constants';
 export default function OptionCard({ option, onRegister }) {
   const [state, setState] = useState('idle'); // idle | saving | done
   const { titulo, kcal = 0, macros = {}, usa_n_despensa = 0, procedencia = 'estimado', cuadre = {}, items = [] } = option || {};
+  // Recomendaciones v2: `porque` (por qué encaja) + `estimado` (macros aproximados → prefijo '~').
+  const porque = option?.porque || option?.por_que || '';
+  const estimado = option?.estimado === true || procedencia === 'estimado';
+  const aprox = estimado ? '~' : '';
 
   const register = async () => {
     if (state !== 'idle' || !onRegister) return;
@@ -34,12 +38,15 @@ export default function OptionCard({ option, onRegister }) {
         <ConfidenceBadge level={badgeLevel} compact />
       </div>
 
+      {porque && <div className="c-subtitle" style={{ color: 'var(--text-2)' }}>{porque}</div>}
+
       <div className="macro-row">
-        <span className="macro-chip num"><i className="macro-dot" style={{ background: 'var(--brand)' }} />{Math.round(kcal)} kcal</span>
-        <span className="macro-chip num"><i className="macro-dot" style={{ background: 'var(--protein)' }} />{Math.round(macros.prot || 0)} g P</span>
-        <span className="macro-chip num"><i className="macro-dot" style={{ background: 'var(--carbs)' }} />{Math.round(macros.carb || 0)} g C</span>
-        <span className="macro-chip num"><i className="macro-dot" style={{ background: 'var(--fat)' }} />{Math.round(macros.gras || 0)} g G</span>
+        <span className="macro-chip num"><i className="macro-dot" style={{ background: 'var(--brand)' }} />{aprox}{Math.round(kcal)} kcal</span>
+        <span className="macro-chip num"><i className="macro-dot" style={{ background: 'var(--protein)' }} />{aprox}{Math.round(macros.prot || 0)} g P</span>
+        <span className="macro-chip num"><i className="macro-dot" style={{ background: 'var(--carbs)' }} />{aprox}{Math.round(macros.carb || 0)} g C</span>
+        <span className="macro-chip num"><i className="macro-dot" style={{ background: 'var(--fat)' }} />{aprox}{Math.round(macros.gras || 0)} g G</span>
       </div>
+      {estimado && <div className="ring-caption" style={{ color: 'var(--text-3)' }}>Macros estimados</div>}
 
       {usa_n_despensa > 0 && (
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: 'var(--brand-strong)' }}>
