@@ -170,4 +170,12 @@ async function syncSubscription(admin, subscription, userIdHint) {
     .from('profiles')
     .update({ plan: isPro ? 'premium' : 'free' })
     .eq('id', userId);
+
+  // Lealtad: sella pro_since en el PRIMER sync a Pro (idempotente: solo si aún es null). Antigüedad Pro
+  // para los tramos de lealtad. Best-effort; si la columna/tabla no existe (SQL pendiente), no rompe.
+  if (isPro) {
+    try {
+      await admin.from('subscriptions').update({ pro_since: new Date().toISOString() }).eq('user_id', userId).is('pro_since', null);
+    } catch (e) { console.error('[lealtad] pro_since:', e?.message); }
+  }
 }

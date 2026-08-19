@@ -5,7 +5,10 @@ import { calcularRacha } from '@/lib/coach/triggers';
 import { nivelDe, logroMeta } from '@/lib/gamification/eventos';
 import { LOGROS } from '@/lib/gamification/config';
 import { objetivosDelDia, siguienteAccion, progresoDia } from '@/lib/gamification/dia';
+import { estadoMascota } from '@/lib/gamification/mascota';
 import { GAMIFICACION_ON } from '@/lib/gamification/otorgar';
+
+const MASCOTA_ON = process.env.MASCOTA_ON === '1';
 
 // Coach · Gamificación V1 (read). GET → estado de 'Hoy' + Mi Progreso (contrato de Rams). DETERMINISTA,
 // $0. 'Hoy'/siguiente-acción se CALCULAN del estado real (pendientes del motor); la racha se computa de
@@ -13,7 +16,7 @@ import { GAMIFICACION_ON } from '@/lib/gamification/otorgar';
 // null/vacías → la HOME degrada intacta.
 export const runtime = 'nodejs';
 
-const VACIO = { siguiente_accion: null, objetivo_hoy: [], progreso: null, racha: null, xp: null, logros: [], semanal: null, celebracion: null };
+const VACIO = { siguiente_accion: null, objetivo_hoy: [], progreso: null, racha: null, xp: null, logros: [], mascota: null, semanal: null, celebracion: null };
 const restarDias = (fecha, n) => { const d = new Date(`${fecha}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - n); return d.toISOString().slice(0, 10); };
 
 export async function GET() {
@@ -29,8 +32,8 @@ export async function GET() {
     // Lecturas en paralelo, cada una deploy-safe (tabla ausente → default).
     const [perfil, targets, mealsHoy, hist, dayState, progreso, logrosRows] = await Promise.all([
       supabase.from('nutrition_profiles').select('coach_params, allergies').eq('user_id', uid).maybeSingle().then((r) => r.data).catch(() => null),
-      supabase.from('nutrition_targets').select('protein_g, water_ml').eq('user_id', uid).maybeSingle().then((r) => r.data).catch(() => null),
-      supabase.from('meals').select('protein_g').eq('user_id', uid).eq('date', hoy).then((r) => r.data).catch(() => null),
+      supabase.from('nutrition_targets').select('protein_g, water_ml, kcal_target').eq('user_id', uid).maybeSingle().then((r) => r.data).catch(() => null),
+      supabase.from('meals').select('protein_g, calories').eq('user_id', uid).eq('date', hoy).then((r) => r.data).catch(() => null),
       supabase.from('meals').select('date').eq('user_id', uid).gte('date', restarDias(hoy, 40)).then((r) => r.data).catch(() => null),
       supabase.from('coach_day_state').select('agua_ml').eq('user_id', uid).eq('date', hoy).maybeSingle().then((r) => r.data).catch(() => null),
       supabase.from('user_progress').select('xp_total').eq('user_id', uid).maybeSingle().then((r) => r.data).catch(() => null),
@@ -91,7 +94,19 @@ export async function GET() {
       if (meta) celebracion = { tipo: 'logro', texto: `¡Logro desbloqueado: ${meta.nombre}!`, id: `logro:${ultimo.logro_code}` };
     }
 
-    return NextResponse.json({ siguiente_accion, objetivo_hoy, progreso: progresoHoy, racha, xp, logros, semanal: null, celebracion });
+    // MASCOTA (derivada 100% del progreso; flag MASCOTA_ON). underEating = proxy 0.70·kcal_target (TCA:
+    // un día comiendo de menos NO la pone feliz → cuidado cálido). Deploy-safe: flag off → mascota:null.
+    let mascota = null;
+    if (MASCOTA_ON) {
+      const kcalHoy = (mealsHoy || []).reduce((a, m) => a + (m.calories || 0), 0);
+      const under = (mealsHoy || []).length > 0 && targets?.kcal_target > 0 && kcalHoy < 0.70 * targets.kcal_target;
+      mascota = estadoMascota({
+        nivel: nv.n, racha: dias, registroHoy, objetivoPendiente: !!siguiente_accion,
+        rachaRota: rota, celebracion, underEating: under,
+      });
+    }
+
+    return NextResponse.json({ siguiente_accion, objetivo_hoy, progreso: progresoHoy, racha, xp, logros, mascota, semanal: null, celebracion });
   } catch (err) {
     console.error('gamificacion GET EXCEPCIÓN:', err?.message);
     return NextResponse.json(VACIO); // nunca rompe la HOME
