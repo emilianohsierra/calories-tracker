@@ -82,7 +82,7 @@ create or replace function public.otorgar_evento(
 ) returns jsonb
 language plpgsql security definer set search_path = '' as $$
 declare
-  v_uid uuid; v_is_user boolean; v_valido boolean; v_xp int; v_total int; v_ref text;
+  v_uid uuid; v_is_user boolean; v_valido boolean; v_xp int; v_total int; v_ref text; v_clave text;
 begin
   v_is_user := auth.uid() is not null;
   v_uid := coalesce(auth.uid(), p_user_id);
@@ -119,9 +119,13 @@ begin
   end;
   if v_xp = 0 then return jsonb_build_object('awarded', false, 'reason', 'tipo_sin_xp'); end if;
 
+  -- CLAVE DE DEDUPE CANÓNICA server-side (de inputs YA validados: tipo + v_ref real), NO del raw del
+  -- cliente → una acción real = un solo award ('meal:123:1','meal:123:2',… → 'MEAL_LOGGED:123').
+  v_clave := p_tipo || ':' || v_ref;
+
   -- LEDGER idempotente: si ya existía (replay) → no otorga.
   insert into public.gamification_events (user_id, tipo, clave_dedupe, xp)
-  values (v_uid, p_tipo, p_clave_dedupe, v_xp)
+  values (v_uid, p_tipo, v_clave, v_xp)
   on conflict (user_id, tipo, clave_dedupe) do nothing;
   if not found then return jsonb_build_object('awarded', false, 'reason', 'replay'); end if;
 
