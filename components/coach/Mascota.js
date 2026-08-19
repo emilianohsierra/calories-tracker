@@ -19,16 +19,20 @@ export function setMascotaOculta(v) {
   } catch { /* sin persistencia */ }
 }
 
-// Estado de la mascota desde el contrato. Cataloge canónico (plan/mascota-catalogo.md): 6 estados
-// PERMITIDOS. Prioriza data.mascota del CTO (ya aplica las guardias TCA: piso/EN_RANGO/UNDER_EATING).
-// INTERIM SEGURO hasta que el CTO exponga data.mascota: solo derivamos estados que NO dependen de las
-// guardias de nutrición — NUNCA 'contento' desde el cliente (requiere EN_RANGO/piso que no vemos aquí;
-// derivarlo violaría la regla dura "UNDER_EATING nunca pone feliz"). Devuelve { estado, submodo? }.
+// Estado de la mascota desde el contrato del CTO (lib/gamification/mascota.js → route gamificacion):
+//   data.mascota = { animo ∈ ANIMOS(6), submodo:'recuperacion'|'cuidado'|null, reaccion, reposo, mensaje } | null
+// El backend YA aplica las guardias TCA (UNDER_EATING → comprensivo/cuidado, NUNCA feliz; piso/EN_RANGO).
+// Devuelve { estado, submodo? } o null (= no renderizar). Reglas:
+//  · mascota objeto → usamos su `animo` (con fallback a `estado` por si cambia el nombre).
+//  · mascota === null → el backend dice "sin mascota" → no renderiza (respeta flag/estado).
+//  · clave `mascota` AUSENTE (backend viejo) → derive INTERIM SEGURO: nunca 'contento' desde el cliente
+//    (requiere EN_RANGO/piso que no vemos aquí; derivarlo violaría "UNDER_EATING nunca pone feliz").
 export function estadoMascota(data) {
-  if (!data) return { estado: 'neutro_tranquilo' };
+  if (!data) return null;
   const m = data.mascota;
   if (typeof m === 'string') return { estado: m };
-  if (m && m.estado) return { estado: m.estado, submodo: m.submodo };
+  if (m && (m.animo || m.estado)) return { estado: m.animo || m.estado, submodo: m.submodo || undefined };
+  if (m === null) return null; // backend presente y explícito: no hay mascota → no renderiza
   if (data.celebracion) return { estado: 'celebrando' };
   if (data.racha?.recuperacion) return { estado: 'comprensivo', submodo: 'recuperacion' };
   if (data.siguiente_accion) return { estado: 'animando' };

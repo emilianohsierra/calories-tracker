@@ -30,6 +30,7 @@ export default function HoySection({ onAccion }) {
   const pct = prog.total > 0 ? Math.min(prog.hechas / prog.total, 1) : 0;
   const racha = data.racha;
   const xp = data.xp;
+  const mascota = estadoMascota(data); // null → no se renderiza (respeta mascota:null del backend)
   const runAccion = (a) => { if (a?.ruta) onAccion?.({ ruta: a.ruta }); else onAccion?.(a); };
 
   return (
@@ -41,7 +42,7 @@ export default function HoySection({ onAccion }) {
             <p className="c-subtitle" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: '0 0 var(--s1)', color: 'var(--brand-strong)', fontWeight: 700, letterSpacing: '.03em', textTransform: 'uppercase', fontSize: 11 }}>
               <Icon name="sparkles" size={13} /> Tu siguiente paso
             </p>
-            <Mascota {...estadoMascota(data)} size={48} />
+            {mascota && <Mascota {...mascota} size={48} />}
           </div>
           <h2 className="c-title" style={{ fontSize: 20, lineHeight: '26px', margin: '0 0 var(--s1)' }}>{acc.titulo}</h2>
           {acc.descripcion && <p className="c-body" style={{ margin: 0, color: 'var(--text-2)' }}>{acc.descripcion}</p>}

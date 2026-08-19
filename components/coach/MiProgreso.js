@@ -54,6 +54,7 @@ export default function MiProgreso({ data, onClose }) {
   const modalRef = useModalA11y(onClose);
   const logros = Array.isArray(data?.logros) ? [...data.logros].sort((a, b) => (b.desbloqueado - a.desbloqueado)) : [];
   const semanal = data?.semanal;
+  const mascota = estadoMascota(data); // null → no se renderiza (respeta mascota:null del backend)
 
   // Opt-out de la mascota (ocultar sin culpa). Refleja la preferencia y re-renderiza el toggle.
   const [oculta, setOculta] = useState(false);
@@ -76,13 +77,15 @@ export default function MiProgreso({ data, onClose }) {
           </button>
         </div>
 
-        {/* Mascota (grande) como avatar del progreso + opt-out sin culpa */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, marginBottom: 'var(--s3)' }}>
-          {!oculta && <Mascota {...estadoMascota(data)} size={104} />}
-          <button type="button" className="link-btn" onClick={() => setMascotaOculta(!oculta)} style={{ minHeight: 'var(--touch)' }}>
-            {oculta ? 'Mostrar compañero' : 'Ocultar compañero'}
-          </button>
-        </div>
+        {/* Mascota (grande) como avatar del progreso + opt-out sin culpa. mascota:null → no se pinta. */}
+        {mascota && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, marginBottom: 'var(--s3)' }}>
+            {!oculta && <Mascota {...mascota} size={104} />}
+            <button type="button" className="link-btn" onClick={() => setMascotaOculta(!oculta)} style={{ minHeight: 'var(--touch)' }}>
+              {oculta ? 'Mostrar compañero' : 'Ocultar compañero'}
+            </button>
+          </div>
+        )}
 
         <XpBar xp={data?.xp} />
         <Racha racha={data?.racha} />
