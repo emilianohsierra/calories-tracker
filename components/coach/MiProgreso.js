@@ -1,7 +1,10 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import LogroBadge from '@/components/coach/LogroBadge';
+import LealtadCard from '@/components/coach/LealtadCard';
+import Mascota, { estadoMascota, mascotaOculta, setMascotaOculta } from '@/components/coach/Mascota';
 import { useModalA11y } from '@/lib/ui/useModalA11y';
 
 // "Mi progreso" (§2/§3/§4): XP + nivel (barra), racha con recuperación SIN culpa, resumen semanal
@@ -52,6 +55,15 @@ export default function MiProgreso({ data, onClose }) {
   const logros = Array.isArray(data?.logros) ? [...data.logros].sort((a, b) => (b.desbloqueado - a.desbloqueado)) : [];
   const semanal = data?.semanal;
 
+  // Opt-out de la mascota (ocultar sin culpa). Refleja la preferencia y re-renderiza el toggle.
+  const [oculta, setOculta] = useState(false);
+  useEffect(() => {
+    const sync = () => setOculta(mascotaOculta());
+    sync();
+    window.addEventListener('mascota-pref', sync);
+    return () => window.removeEventListener('mascota-pref', sync);
+  }, []);
+
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Mi progreso" style={{ maxWidth: 480 }}>
@@ -64,8 +76,17 @@ export default function MiProgreso({ data, onClose }) {
           </button>
         </div>
 
+        {/* Mascota (grande) como avatar del progreso + opt-out sin culpa */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, marginBottom: 'var(--s3)' }}>
+          {!oculta && <Mascota {...estadoMascota(data)} size={104} />}
+          <button type="button" className="link-btn" onClick={() => setMascotaOculta(!oculta)} style={{ minHeight: 'var(--touch)' }}>
+            {oculta ? 'Mostrar compañero' : 'Ocultar compañero'}
+          </button>
+        </div>
+
         <XpBar xp={data?.xp} />
         <Racha racha={data?.racha} />
+        <LealtadCard />
 
         {semanal && (Array.isArray(semanal.insights) ? semanal.insights.length : 0) > 0 && (
           <div className="card" style={{ marginBottom: 'var(--s3)' }}>

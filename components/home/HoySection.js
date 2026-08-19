@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import MiProgreso from '@/components/coach/MiProgreso';
 import Celebracion from '@/components/coach/Celebracion';
+import Mascota, { estadoMascota } from '@/components/coach/Mascota';
 import { getGamificacion } from '@/lib/coach/gamificacionClient';
 
 // Sección "HOY" (§22): la SIGUIENTE MEJOR ACCIÓN como héroe + objetivo del día (lista marcable) +
@@ -36,9 +37,12 @@ export default function HoySection({ onAccion }) {
       {/* HÉROE: la siguiente mejor acción */}
       {acc?.titulo && (
         <div className="card" style={{ background: 'linear-gradient(135deg, var(--brand-tint), var(--surface))', border: '1px solid var(--border)', boxShadow: 'var(--shadow-1)' }}>
-          <p className="c-subtitle" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: '0 0 var(--s1)', color: 'var(--brand-strong)', fontWeight: 700, letterSpacing: '.03em', textTransform: 'uppercase', fontSize: 11 }}>
-            <Icon name="sparkles" size={13} /> Tu siguiente paso
-          </p>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--s2)' }}>
+            <p className="c-subtitle" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: '0 0 var(--s1)', color: 'var(--brand-strong)', fontWeight: 700, letterSpacing: '.03em', textTransform: 'uppercase', fontSize: 11 }}>
+              <Icon name="sparkles" size={13} /> Tu siguiente paso
+            </p>
+            <Mascota {...estadoMascota(data)} size={48} />
+          </div>
           <h2 className="c-title" style={{ fontSize: 20, lineHeight: '26px', margin: '0 0 var(--s1)' }}>{acc.titulo}</h2>
           {acc.descripcion && <p className="c-body" style={{ margin: 0, color: 'var(--text-2)' }}>{acc.descripcion}</p>}
           {acc.cta?.label && (
