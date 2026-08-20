@@ -53,10 +53,10 @@ function MealCard({ meal, onDelete }) {
         </div>
         {confirming ? (
           <div style={{ display: 'flex', gap: 2 }}>
-            <button type="button" className="icon-btn" style={{ color: 'var(--over)', fontWeight: 600, fontSize: 12 }} onClick={() => onDelete(meal.id)}>
+            <button type="button" className="icon-btn c-subtitle" style={{ color: 'var(--over)', fontWeight: 600 }} onClick={() => onDelete(meal.id)}>
               Borrar
             </button>
-            <button type="button" className="icon-btn" style={{ fontSize: 12 }} onClick={() => setConfirming(false)}>
+            <button type="button" className="icon-btn c-subtitle" onClick={() => setConfirming(false)}>
               No
             </button>
           </div>

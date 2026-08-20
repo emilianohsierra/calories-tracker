@@ -13,6 +13,7 @@ export default function TrainingRow({ entreno }) {
 
   return (
     <div
+      className="c-subtitle"
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -21,9 +22,7 @@ export default function TrainingRow({ entreno }) {
         padding: '6px 12px',
         borderRadius: 'var(--r-md)',
         background: 'var(--surface-2)',
-        color: 'var(--text)',
-        fontSize: 13,
-        fontWeight: 500,
+        color: 'var(--text)', // override del rol: la píldora usa el texto más fuerte
       }}
     >
       <span style={{ display: 'inline-flex', color: 'var(--brand-strong)' }}>

@@ -10,8 +10,8 @@ export default function MacroBar({ label, value = 0, goal = 0, color = 'var(--br
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>{label}</span>
-        <span className="num" style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+        <span className="c-subtitle">{label}</span>
+        <span className="num c-subtitle" style={{ fontWeight: 600, color: 'var(--text)' }}>
           {v} / {g} g
         </span>
       </div>
