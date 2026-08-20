@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/Icon';
 import LogroBadge from '@/components/coach/LogroBadge';
 import LealtadCard from '@/components/coach/LealtadCard';
+import RetosSection from '@/components/coach/RetoCard';
+import CoachConectado from '@/components/coach/CoachConectado';
 import Mascota, { estadoMascota, mascotaOculta, setMascotaOculta } from '@/components/coach/Mascota';
 import { useModalA11y } from '@/lib/ui/useModalA11y';
 
@@ -50,7 +52,7 @@ function Racha({ racha }) {
   );
 }
 
-export default function MiProgreso({ data, onClose }) {
+export default function MiProgreso({ data, retos, coachContexto, onClose }) {
   const modalRef = useModalA11y(onClose);
   const logros = Array.isArray(data?.logros) ? [...data.logros].sort((a, b) => (b.desbloqueado - a.desbloqueado)) : [];
   const semanal = data?.semanal;
@@ -87,8 +89,19 @@ export default function MiProgreso({ data, onClose }) {
           </div>
         )}
 
+        {/* V2.1 · Coach-conectado: celebra nivel/racha/reto sin presión. null → oculto */}
+        {coachContexto && (
+          <div style={{ marginBottom: 'var(--s3)' }}>
+            <CoachConectado contexto={coachContexto} />
+          </div>
+        )}
+
         <XpBar xp={data?.xp} />
         <Racha racha={data?.racha} />
+
+        {/* V2.1 · Retos (progreso X/Y) también en Mi Progreso. null → oculto */}
+        {retos && <RetosSection diario={retos.diario} semanal={retos.semanal} />}
+
         <LealtadCard />
 
         {semanal && (Array.isArray(semanal.insights) ? semanal.insights.length : 0) > 0 && (

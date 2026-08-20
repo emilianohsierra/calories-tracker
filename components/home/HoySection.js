@@ -5,7 +5,11 @@ import Icon from '@/components/ui/Icon';
 import MiProgreso from '@/components/coach/MiProgreso';
 import Celebracion from '@/components/coach/Celebracion';
 import Mascota, { estadoMascota } from '@/components/coach/Mascota';
+import RetosSection from '@/components/coach/RetoCard';
+import CheckinAnimo from '@/components/coach/CheckinAnimo';
 import { getGamificacion } from '@/lib/coach/gamificacionClient';
+import { getRetos } from '@/lib/coach/retosClient';
+import { getCheckinHoy, enviarCheckin } from '@/lib/coach/checkinClient';
 
 // Sección "HOY" (§22): la SIGUIENTE MEJOR ACCIÓN como héroe + objetivo del día (lista marcable) +
 // progreso X/Y + racha + XP/nivel discreto. Estética premium: cards + barras calmadas, coherente
@@ -14,12 +18,22 @@ import { getGamificacion } from '@/lib/coach/gamificacionClient';
 export default function HoySection({ onAccion }) {
   const [data, setData] = useState(undefined); // undefined=cargando · null=degrade · objeto=listo
   const [progresoOpen, setProgresoOpen] = useState(false);
+  const [retos, setRetos] = useState(null);     // V2.1 · null = oculto (deploy-safe)
+  const [checkin, setCheckin] = useState(null); // V2.1 · null = oculto (deploy-safe)
 
   useEffect(() => {
     let vivo = true;
     getGamificacion().then((d) => { if (vivo) setData(d); });
+    getRetos().then((r) => { if (vivo) setRetos(r); });
+    getCheckinHoy().then((c) => { if (vivo) setCheckin(c); });
     return () => { vivo = false; };
   }, []);
+
+  // Envío optimista del check-in (1/día): marca hecho y persiste (Fase 2 = POST real).
+  const submitCheckin = ({ animo, energia }) => {
+    setCheckin({ hecho: true, animo, energia });
+    enviarCheckin({ animo, energia });
+  };
 
   if (data === null) return null; // degrada (flag off / sin backend) sin romper HOME
   if (data === undefined) return <HoySkeleton />;
@@ -32,6 +46,17 @@ export default function HoySection({ onAccion }) {
   const xp = data.xp;
   const mascota = estadoMascota(data); // null → no se renderiza (respeta mascota:null del backend)
   const runAccion = (a) => { if (a?.ruta) onAccion?.({ ruta: a.ruta }); else onAccion?.(a); };
+
+  // Coach-conectado: contexto compuesto del estado que ya tengo (nivel/racha + reto activo + ánimo).
+  // Sin endpoint nuevo; solo se arma si hay algo que celebrar. La línea IA (mensaje) llega en Fase 2+.
+  const retoActivo = retos?.semanal || retos?.diario;
+  const coachContexto = (xp || racha) ? {
+    nivel: xp?.nivel,
+    nivel_nombre: xp?.nombre,
+    racha: racha?.dias,
+    reto_activo: retoActivo ? { titulo: retoActivo.titulo } : undefined,
+    animo: checkin?.hecho ? checkin.animo : undefined,
+  } : null;
 
   return (
     <section aria-label="Hoy" style={{ marginBottom: 'var(--s4)' }}>
@@ -84,6 +109,16 @@ export default function HoySection({ onAccion }) {
         </div>
       )}
 
+      {/* V2.1 · Retos (1 diario + 1 semanal) — deploy-safe: null → oculto */}
+      {retos && <RetosSection diario={retos.diario} semanal={retos.semanal} />}
+
+      {/* V2.1 · Check-in de ánimo/energía (opcional, 1/día) — oferta suave; null → oculto */}
+      {checkin && (
+        <div style={{ marginBottom: 'var(--s4)' }}>
+          <CheckinAnimo hechoHoy={checkin.hecho} valorHoy={checkin} onSubmit={submitCheckin} />
+        </div>
+      )}
+
       {/* Racha + XP/nivel discreto → abre "Mi progreso" */}
       {(racha || xp) && (
         <button type="button" onClick={() => setProgresoOpen(true)} aria-label="Ver mi progreso"
@@ -105,7 +140,7 @@ export default function HoySection({ onAccion }) {
         </button>
       )}
 
-      {progresoOpen && <MiProgreso data={data} onClose={() => setProgresoOpen(false)} />}
+      {progresoOpen && <MiProgreso data={data} retos={retos} coachContexto={coachContexto} onClose={() => setProgresoOpen(false)} />}
       {data.celebracion && <Celebracion celebracion={data.celebracion} />}
     </section>
   );
