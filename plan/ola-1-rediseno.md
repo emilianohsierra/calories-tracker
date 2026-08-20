@@ -122,6 +122,52 @@ Auditados los `fontSize` inline reales. Regla: **adoptar rol donde existe uno; d
 
 > Nada de S7 se commitea hasta que Lugia confirme el reparto (toca varios archivos, algunos del carril S5). Este bloque es el checklist turn-key para ejecutarlo sin pisar a nadie.
 
+### 4.2 S8 — Inter vía `next/font/google` (PREPARADO turn-key, ejecutar AL CIERRE)
+
+**Ejecutar solo después de que el batch del CTO esté vivo y verificado (Ready 307).** Blast-radius alto: cambia la fuente base de toda la app. `next/font` **auto-hospeda** la fuente (la sirve desde el propio origen en `/_next/static`, sin request a Google en runtime) → **cero CLS por red** y sin bloqueo de render.
+
+**Estado actual (verificado 2026-08-19):** Next `^15.3.4`, App Router, `app/layout.js` (`RootLayout` con `<html lang="es">`/`<body>`), `next/font` **no usado aún**, y `app/globals.css:34` fija `font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;`.
+
+**Archivos que toca (2):**
+1. `app/layout.js` — **archivo libre** (no es de S3). Aquí va TODO el cableado de `next/font`.
+2. `app/globals.css:34` — **una sola línea** (la declaración `font-family`). ⚠️ **Es carril del CTO (S3)** → la edición de esa línea la hace/aprueba el dueño de `globals.css`, no Rams. Coordinar el handoff de ese one-liner.
+
+**Cableado (en `app/layout.js`), turn-key:**
+```
+// pseudo — NO commitear hasta el cierre
+import { Inter } from 'next/font/google';
+const inter = Inter({
+  subsets: ['latin'],          // español (á é í ó ú ñ ü ¿ ¡) está en 'latin'; NO hace falta 'latin-ext'
+  display: 'swap',             // muestra fallback y cambia a Inter al cargar (evita texto invisible/FOIT)
+  variable: '--font-inter',    // expone CSS var para que globals.css la consuma (mantiene la cascada)
+  // adjustFontFallback: true  // DEFAULT en next/font: genera fallback size-adjusted (métricas tipo Arial)
+  //                             → minimiza el salto de layout en el swap (CLS≈0)
+});
+// aplicar la variable en <html> (no en <body>) para que exista global, incl. portales/modales:
+<html lang="es" className={inter.variable}>
+```
+Inter de `next/font/google` es **variable font** → cubre 400/500/600/700 (los pesos que usa la app) sin enumerar `weight`. `next/font` **preload** automático del subset usado.
+
+**Edición en `globals.css:34` (handoff al dueño de S3):**
+```
+font-family: var(--font-inter), system-ui, -apple-system, 'Segoe UI', sans-serif;
+```
+El stack de fallback se conserva íntegro detrás de la var → si Inter no cargara, degrada exactamente al look actual.
+
+**Cómo evitamos CLS / FOUT:**
+- **Auto-hosting** (next/font) → sin request externo, sin render-blocking, sin flash por latencia de red.
+- **`adjustFontFallback` (default on)** → el fallback queda ajustado en métricas a Inter, así el swap `system-ui → Inter` casi no mueve el layout.
+- **`display: 'swap'`** → nunca texto invisible; el brevísimo FOUT restante es de fallback→Inter, ya minimizado por el punto anterior.
+- **`variable` + fallback completo en el `font-family`** → degradación idéntica al estado actual si algo fallara.
+- La app usa números tabulares vía `.num` (`font-variant-numeric`), independiente de la familia → **no** se rompe con el cambio de fuente.
+
+**Riesgos y verificación:**
+- ⚠️ **Colisión de carril:** la línea `globals.css:34` es de S3 (CTO). Ejecutar S8 **con** el dueño de `globals.css` o handoff explícito del one-liner. `app/layout.js` sí es libre.
+- ⚠️ **PWA/offline:** los archivos de fuente viven en `/_next/static`. Verificar que el **service worker** los cachee (precache) para que la fuente no falle offline; si el SW es allowlist por ruta, añadir el patrón de fuentes. **Revisar `PushRegister`/SW config.**
+- **Anti-flash de tema** (`THEME_INIT` en `<head>`): independiente de la fuente; no se toca.
+- **QA:** `npm run build` + confirmar visualmente que Inter **realmente** renderiza (no fallback silencioso) en HOME/Coach/Despensa, claro y dark; vitest 805/805; 0 secretos; commit NUEVO (no `--amend`).
+- **Reversible:** revertir = quitar el import/variable en `layout.js` + restaurar la línea de `globals.css`. Sin migración de datos.
+
 ---
 
 ## 5. Track paralelo FUNCIONAL (fuera de Ola 1 — decisión de Lugia)
