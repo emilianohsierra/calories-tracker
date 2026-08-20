@@ -40,6 +40,7 @@ function Cara({ energia, activa, size = 32 }) {
 export default function CheckinAnimo({ hechoHoy = false, valorHoy = null, onSubmit, onDismiss }) {
   const [sel, setSel] = useState(valorHoy?.energia ?? null);
   const [enviado, setEnviado] = useState(hechoHoy);
+  const [error, setError] = useState('');
 
   // Estado "ya registrado hoy" (1/día): micro-reconocimiento cálido, sin juicio.
   if (enviado) {
@@ -55,10 +56,17 @@ export default function CheckinAnimo({ hechoHoy = false, valorHoy = null, onSubm
     );
   }
 
-  const elegir = (c) => {
+  // Optimista pero HONESTO (M2): mostramos "Gracias" al instante, pero si el guardado FALLA revertimos
+  // al selector con un aviso gentil (wellness, sin culpa ni regaño) — nunca decir "registrado" si no persistió.
+  const elegir = async (c) => {
     setSel(c.energia);
+    setError('');
     setEnviado(true);
-    onSubmit?.({ animo: c.animo, energia: c.energia });
+    const ok = await onSubmit?.({ animo: c.animo, energia: c.energia });
+    if (ok === false) {
+      setEnviado(false);
+      setError('No se pudo guardar. Cuando quieras, inténtalo de nuevo.');
+    }
   };
 
   return (
@@ -91,6 +99,12 @@ export default function CheckinAnimo({ hechoHoy = false, valorHoy = null, onSubm
           );
         })}
       </div>
+
+      {error && (
+        <p role="status" aria-live="polite" className="c-subtitle" style={{ margin: 'var(--s2) 0 0', color: 'var(--text-2)', textAlign: 'center' }}>
+          {error}
+        </p>
+      )}
 
       {onDismiss && (
         <div style={{ marginTop: 'var(--s2)', textAlign: 'center' }}>

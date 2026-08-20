@@ -29,10 +29,12 @@ export default function HoySection({ onAccion }) {
     return () => { vivo = false; };
   }, []);
 
-  // Envío optimista del check-in (1/día): marca hecho y persiste (Fase 2 = POST real).
-  const submitCheckin = ({ animo, energia }) => {
-    setCheckin({ hecho: true, animo, energia });
-    enviarCheckin({ animo, energia });
+  // Check-in (1/día): persiste y fija el estado según el RESULTADO real (M2 — no mentir si el POST falla).
+  // El widget muestra "Gracias" optimista y revierte solo si devolvemos false. Devolvemos el ok para eso.
+  const submitCheckin = async ({ animo, energia }) => {
+    const ok = await enviarCheckin({ animo, energia });
+    setCheckin(ok ? { hecho: true, animo, energia } : { hecho: false });
+    return ok;
   };
 
   if (data === null) return null; // degrada (flag off / sin backend) sin romper HOME
