@@ -5,6 +5,7 @@ import { currentTimeStr } from '@/lib/format';
 import UpgradeModal from '@/components/UpgradeModal';
 import Icon from '@/components/ui/Icon';
 import { readPaywall } from '@/lib/paywall';
+import { useModalA11y } from '@/lib/ui/useModalA11y';
 
 const MEAL_TYPES = ['desayuno', 'comida', 'cena', 'snack'];
 
@@ -31,6 +32,9 @@ export default function AddMealModal({ photo, date, usage, resetLabel, onClose, 
   const [form, setForm] = useState(null);
   const [rawAnalysis, setRawAnalysis] = useState(null);
   const [paywall, setPaywall] = useState(null); // paywall del backend (o gate cliente): { variant, feature, usage }
+  // A11y del modal (mismo hook probado que UpgradeModal/MiProgreso/…): foco inicial, trampa de Tab,
+  // Escape, retorno de foco, scroll-lock. Guard: no cerrar mientras se guarda (evita perder el registro).
+  const modalRef = useModalA11y(onClose, () => !saving);
 
   // El límite aplica SOLO a la IA. Pro = ilimitado; Free necesita saldo > 0.
   // (M2) Si la cuota no cargó (usage null), NO bloquear: se permite el intento y el
@@ -125,8 +129,8 @@ export default function AddMealModal({ photo, date, usage, resetLabel, onClose, 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label="Agregar platillo">
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && !saving && onClose()}>
+      <div className="modal" ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Agregar platillo">
         <h2>Agregar platillo</h2>
         <img className="preview-img" src={photo.url} alt="Foto del platillo" />
 
