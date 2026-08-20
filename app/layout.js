@@ -1,5 +1,10 @@
+import { Inter } from 'next/font/google';
 import './globals.css';
 import PushRegister from '@/components/PushRegister';
+
+// Ola1-S8: Inter self-hosted (next/font, sin request a Google en runtime). Variable font → no enumerar
+// pesos. display:'swap' → sin FOIT; fallback system-ui mientras carga. Expone --font-inter en <html>.
+const inter = Inter({ subsets: ['latin'], display: 'swap', variable: '--font-inter' });
 
 export const metadata = {
   title: 'Registro Calórico',
@@ -14,7 +19,7 @@ const THEME_INIT = `try{var t=localStorage.getItem('theme');if(t==='dark'||t==='
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="es">
+    <html lang="es" className={inter.variable}>
       <head>
         <meta name="theme-color" content="#FBFBF9" />
         <link rel="apple-touch-icon" href="/icon.svg" />

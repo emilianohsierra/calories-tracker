@@ -31,7 +31,7 @@ body {
 body {
   background: var(--page);
   color: var(--ink);
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--font-inter), system-ui, -apple-system, 'Segoe UI', sans-serif; /* Ola1-S8: Inter + fallback intacto */
   font-size: 15px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
@@ -94,7 +94,7 @@ body {
 .banner-sub {
   margin: 3px 0 0;
   font-size: 13px;
-  color: var(--ink-secondary);
+  color: var(--text-2);
 }
 
 .date-nav {
@@ -109,14 +109,14 @@ body {
   min-width: 150px;
   text-align: center;
   font-weight: 600;
-  color: var(--ink-secondary);
+  color: var(--text-2);
   text-transform: capitalize;
 }
 
 .nav-btn {
   border: 1px solid var(--border);
   background: var(--surface);
-  color: var(--ink-secondary);
+  color: var(--text-2);
   border-radius: 8px;
   width: 44px;
   height: 44px;
@@ -141,7 +141,7 @@ body {
 .card-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--ink-muted);
+  color: var(--text-3);
   margin: 0 0 10px;
 }
 
@@ -155,12 +155,12 @@ body {
 .hero-unit {
   font-size: 16px;
   font-weight: 500;
-  color: var(--ink-muted);
+  color: var(--text-3);
   margin-left: 6px;
 }
 
 .hero-sub {
-  color: var(--ink-secondary);
+  color: var(--text-2);
   font-size: 14px;
   margin-top: 2px;
 }
@@ -212,7 +212,7 @@ body {
   gap: 6px;
   margin-top: 8px;
   font-size: 13px;
-  color: var(--ink-secondary);
+  color: var(--text-2);
 }
 
 .meter-status .status-icon {
@@ -236,7 +236,7 @@ body {
 
 .stat-label {
   font-size: 12px;
-  color: var(--ink-muted);
+  color: var(--text-3);
 }
 
 .stat-value {
@@ -248,7 +248,7 @@ body {
 .stat-value .unit {
   font-size: 12px;
   font-weight: 500;
-  color: var(--ink-muted);
+  color: var(--text-3);
   margin-left: 2px;
 }
 
@@ -316,7 +316,7 @@ body {
 }
 
 .meal-desc {
-  color: var(--ink-secondary);
+  color: var(--text-2);
   font-size: 13px;
   margin: 2px 0 6px;
   overflow-wrap: break-word;
@@ -327,7 +327,7 @@ body {
   flex-wrap: wrap;
   gap: 6px;
   font-size: 12px;
-  color: var(--ink-muted);
+  color: var(--text-3);
   align-items: center;
 }
 
@@ -352,14 +352,14 @@ body {
 .meal-kcal .unit {
   font-size: 11px;
   font-weight: 500;
-  color: var(--ink-muted);
+  color: var(--text-3);
   margin-left: 2px;
 }
 
 .icon-btn {
   border: none;
   background: none;
-  color: var(--ink-muted);
+  color: var(--text-3);
   cursor: pointer;
   font-size: 15px;
   padding: 4px;
@@ -378,7 +378,7 @@ body {
 
 .empty-state {
   text-align: center;
-  color: var(--ink-muted);
+  color: var(--text-3);
   padding: 28px 12px;
   font-size: 14px;
 }
@@ -416,7 +416,7 @@ body {
 .btn-ghost {
   background: var(--surface);
   border-color: var(--baseline);
-  color: var(--ink-secondary);
+  color: var(--text-2);
 }
 
 .fab-row {
@@ -494,7 +494,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: var(--ink-secondary);
+  color: var(--text-2);
   padding: 18px 4px;
 }
 
@@ -530,7 +530,7 @@ body {
   display: block;
   font-size: 12px;
   font-weight: 600;
-  color: var(--ink-muted);
+  color: var(--text-3);
   margin-bottom: 4px;
 }
 
@@ -560,7 +560,7 @@ body {
 
 .confidence-note {
   font-size: 12px;
-  color: var(--ink-muted);
+  color: var(--text-3);
   margin-top: 10px;
 }
 
@@ -633,10 +633,11 @@ body {
   font-size: 13px;
   cursor: pointer;
   text-decoration: underline;
-  min-height: var(--touch); /* Ola1-S3: target 44px (Salir/Editar plan/Reintentar) */
-  display: inline-flex;
-  align-items: center;
 }
+/* Ola1-FIX-I1: el 44px NO va en la base (WCAG 2.5.5 exime enlaces EN LÍNEA como "¿No tienes cuenta? Regístrate").
+   Se acota a los .link-btn STANDALONE por contenedor de acciones. (Editar plan → .plan-actions; Reintentar del
+   coach ya trae minHeight inline.) */
+.banner-actions .link-btn { min-height: var(--touch); display: inline-flex; align-items: center; }
 
 .auth-form {
   display: flex;
@@ -651,7 +652,7 @@ body {
   flex-direction: column;
   gap: 6px;
   font-size: 13px;
-  color: var(--ink-secondary);
+  color: var(--text-2);
 }
 
 .field input {
@@ -674,7 +675,7 @@ body {
   margin: 14px auto 0;
   text-align: center;
   font-size: 13px;
-  color: var(--ink-secondary);
+  color: var(--text-2);
 }
 
 /* --- Paso E: monetización (paywall / planes) --- */
@@ -726,7 +727,7 @@ body {
 
 .plan-fineprint {
   font-size: 12px;
-  color: var(--ink-muted);
+  color: var(--text-3);
   margin: 4px 0 12px;
 }
 
@@ -758,9 +759,7 @@ body {
   --accent-strong: var(--brand-strong);
   --accent-track: var(--brand-tint);
   --warn: var(--warn-c);        /* nombre canónico del spec; --warn-c sigue vivo */
-  /* Ola1-S3: alias legacy de texto → roles canónicos (resuelven en tiempo de uso, light y dark). */
-  --ink-secondary: var(--text-2);
-  --ink-muted: var(--text-3);
+  /* Ola1-menor: los usos de --ink-secondary/--ink-muted se renombraron a --text-2/--text-3 (0 usos vivos). */
 
   --protein: #E4572E;
   --carbs: #F2A93B;
