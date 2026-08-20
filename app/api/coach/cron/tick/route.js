@@ -6,9 +6,12 @@ import { getHomeBriefing } from '@/lib/coach/briefing';
 import { localDateTime } from '@/lib/coach/context';
 import {
   evalMissedMeal, evalLowProtein, evalStreak, evalWeeklyReview, evalUserInactivity,
+  evalHitoRacha, evalRetoCasi, evalSinCheckin,
   enQuietHours, seleccionarPorPresupuesto, calcularRacha, diasDesdeUltimoRegistro, dedupeKey,
   TOGGLE_COL,
 } from '@/lib/coach/triggers';
+import { retosActivo } from '@/lib/gamification/v2';
+import { procesarRetos, diaDelAno } from '@/lib/gamification/retosCron';
 import { puliArNudge } from '@/lib/coach/redactar';
 import { PREFS_DEFAULT } from '@/lib/coach/prefs';
 import { enviarPush } from '@/lib/push/send';
@@ -121,7 +124,7 @@ async function procesarUsuario(admin, userId, { hoy, hora, esDiaReporte, stats, 
   const sinceStreak = restarDias(hoy, STREAK_WINDOW_DAYS);
   const histRes = await admin
     .from('meals')
-    .select('date, calories')
+    .select('date, calories, protein_g') // protein_g: retos de métrica (prot_meta_dias); ignorado por V1
     .eq('user_id', userId)
     .gte('date', sinceStreak);
   const hist = histRes?.data || [];
@@ -138,6 +141,30 @@ async function procesarUsuario(admin, userId, { hoy, hora, esDiaReporte, stats, 
   // F2 · inactividad: días desde el último registro (para el re-enganche por push).
   const diasInactivo = diasDesdeUltimoRegistro(fechas, hoy);
 
+  // ── V2.1 · RETOS (S1) + señales de gamificación (S4). GATE: solo si v2/retos activos (flag + kill off).
+  //    Deploy-safe: si off / tablas ausentes → retosState=[] / checkinHoy=false → los evalX devuelven null
+  //    y V1 queda INTACTO. El cliente NUNCA reporta progreso: el cron recalcula desde el ledger + métricas. ──
+  let retosState = [];
+  let checkinHoy = false;
+  const seedGamif = diaDelAno(hoy); // variedad determinista del copy positivo (mismo día → mismo texto)
+  if (await retosActivo(admin)) {
+    // targets/profile solo para retos de métrica (rango_dias/prot_meta_dias); deploy-safe.
+    let targets = null; let profile = null;
+    try {
+      const { data } = await admin.from('nutrition_targets').select('kcal_target, protein_g, bmr').eq('user_id', userId).maybeSingle();
+      targets = data || null;
+    } catch { targets = null; }
+    try {
+      const { data } = await admin.from('nutrition_profiles').select('sex').eq('user_id', userId).maybeSingle();
+      profile = data || null;
+    } catch { profile = null; }
+    retosState = await procesarRetos(admin, userId, { hoy, hist, targets, profile });
+    try {
+      const { data } = await admin.from('checkins').select('dia').eq('user_id', userId).eq('dia', hoy).maybeSingle();
+      checkinHoy = !!data;
+    } catch { checkinHoy = false; }
+  }
+
   // Evaluadores puros → candidatos. Se filtran por los toggles del usuario.
   let candidatos = [
     evalMissedMeal({ consumido, horaLocal: hora }),
@@ -145,6 +172,10 @@ async function procesarUsuario(admin, userId, { hoy, hora, esDiaReporte, stats, 
     evalStreak({ rachaHoy, rachaAyer, registroHoy }),
     evalWeeklyReview({ esDiaReporte, isPro, diasConRegistro: diasSemana, kcalPromedio }),
     evalUserInactivity({ dias: diasInactivo }),
+    // V2.1 S4 · señales de gamificación (copy SOLO positivo; nunca presión de racha). Null si V2 off.
+    evalHitoRacha({ rachaAyer, registroHoy, seed: seedGamif }),
+    evalRetoCasi({ retos: retosState, seed: seedGamif }),
+    evalSinCheckin({ checkinHoy, horaLocal: hora, seed: seedGamif }),
   ].filter(Boolean).filter((n) => prefs[TOGGLE_COL[n.event_type]] !== false);
 
   // Si dispara user_inactivity, subsume a missed_meal (misma familia "no registraste"): evita
