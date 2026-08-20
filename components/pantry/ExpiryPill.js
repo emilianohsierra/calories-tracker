@@ -27,7 +27,7 @@ export default function ExpiryPill({ date, showFar = false }) {
 
   return (
     <span
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontWeight: 600, color }}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, fontWeight: 600, color }}
       aria-label={text}
     >
       <Icon name="calendar" size={12} />

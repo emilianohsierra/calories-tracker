@@ -23,7 +23,7 @@ export default function ConfidenceBadge({ level, compact = false }) {
           background: 'var(--surface)',
           border: '1px solid var(--border)',
           color: c.color,
-          fontSize: 11,
+          fontSize: 13, /* Ola1-S6: sello ≥13px (antes 11) */
           fontWeight: 600,
           lineHeight: 1,
         }}
