@@ -46,7 +46,9 @@ export default function ConsejoDelDia({ onCta }) {
         </div>
       ) : (
         <>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--brand-strong)', fontSize: 12, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase' }}>
+          {/* Rol canónico .c-eyebrow (11/600/.04em/uppercase); solo se sobreescribe el color por el
+              acento de marca del hero (mismo patrón que el eyebrow de HoySection). */}
+          <div className="c-eyebrow" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--brand-strong)' }}>
             <Icon name={esRacha ? 'flame' : 'sparkles'} size={14} /> {esRacha ? 'Tu racha' : 'Consejo de hoy'}
           </div>
 
