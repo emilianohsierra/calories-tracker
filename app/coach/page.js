@@ -47,6 +47,7 @@ export default function CoachPage() {
   const [usage, setUsage] = useState(null);
   const threadRef = useRef(null);
   const fileRef = useRef(null);
+  const wasBusy = useRef(false); // S2 a11y: detecta fin de turno (busy true→false) para devolver foco.
 
   useEffect(() => {
     setDebug(typeof window !== 'undefined' && window.location.search.includes('debug'));
@@ -78,6 +79,22 @@ export default function CoachPage() {
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
   }, [messages]);
+
+  // S2 a11y: enfoca el composer (el chat es de teclado). Único composer en la página.
+  const focusComposer = () => document.querySelector('.coach-composer textarea')?.focus();
+
+  // Al abrir el chat, el foco arranca en el composer.
+  useEffect(() => {
+    focusComposer();
+  }, []);
+
+  // Retorno de foco al composer al terminar un turno (busy true→false), salvo si se abrió
+  // el paywall (ese modal gestiona su propio foco). Así, tras locutarse la respuesta del
+  // coach, el usuario de teclado/lector vuelve al punto de escritura.
+  useEffect(() => {
+    if (wasBusy.current && !busy && !paywall) focusComposer();
+    wasBusy.current = busy;
+  }, [busy, paywall]);
 
   const setLastBubble = (patch) =>
     setMessages((m) => {
@@ -363,14 +380,22 @@ export default function CoachPage() {
         </div>
       </header>
 
-      <div className="coach-thread" ref={threadRef}>
+      <div
+        className="coach-thread"
+        ref={threadRef}
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions text"
+        aria-atomic="false"
+        aria-label="Conversación con tu coach"
+      >
         {messages.length === 0 && <div className="chat-bubble coach">{greetingText(ctx)}</div>}
         {messages.map((m, i) => (
           <div key={i} className={`chat-bubble ${m.role === 'user' ? 'user' : 'coach'}`}>
             {m.error ? (
               <div className="chat-error">
                 <span>No pude responder ahora. Inténtalo de nuevo.</span>
-                <button type="button" className="link-btn retry" onClick={retry} disabled={busy}>Reintentar</button>
+                <button type="button" className="link-btn retry" onClick={retry} disabled={busy} style={{ minHeight: 'var(--touch)', display: 'inline-flex', alignItems: 'center' }} aria-label="Reintentar enviar el mensaje">Reintentar</button>
                 {debug && m.diag && <span className="ring-caption">{m.diag}</span>}
               </div>
             ) : m.options ? (
