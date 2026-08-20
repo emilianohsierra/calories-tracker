@@ -172,6 +172,11 @@ body {
   cursor: pointer;
   font-size: 13px;
   padding: 0 4px;
+  min-height: var(--touch); /* Ola1-S3: target 44px */
+  min-width: var(--touch);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .goal-form {
@@ -426,7 +431,7 @@ body {
 }
 
 .fab {
-  box-shadow: 0 4px 14px rgba(11, 11, 11, 0.18);
+  box-shadow: var(--shadow-3); /* Ola1-S3: sombra hardcodeada → token */
   font-size: 15px;
   padding: 13px 24px;
   border-radius: 999px;
@@ -438,7 +443,7 @@ body {
   padding: 0;
   border-radius: 50%;
   font-size: 20px;
-  box-shadow: 0 4px 14px rgba(11, 11, 11, 0.12);
+  box-shadow: var(--shadow-2); /* Ola1-S3: sombra hardcodeada → token */
 }
 
 /* ---------- Modal ---------- */
@@ -614,6 +619,9 @@ body {
   border-radius: 999px;
   padding: 4px 10px;
   white-space: nowrap;
+  min-height: var(--touch); /* Ola1-S3: es <button> (abre planes) → target 44px */
+  display: inline-flex;
+  align-items: center;
 }
 
 .link-btn {
@@ -625,6 +633,9 @@ body {
   font-size: 13px;
   cursor: pointer;
   text-decoration: underline;
+  min-height: var(--touch); /* Ola1-S3: target 44px (Salir/Editar plan/Reintentar) */
+  display: inline-flex;
+  align-items: center;
 }
 
 .auth-form {
@@ -747,6 +758,9 @@ body {
   --accent-strong: var(--brand-strong);
   --accent-track: var(--brand-tint);
   --warn: var(--warn-c);        /* nombre canónico del spec; --warn-c sigue vivo */
+  /* Ola1-S3: alias legacy de texto → roles canónicos (resuelven en tiempo de uso, light y dark). */
+  --ink-secondary: var(--text-2);
+  --ink-muted: var(--text-3);
 
   --protein: #E4572E;
   --carbs: #F2A93B;
@@ -840,8 +854,7 @@ body {
 .chat-bubble.coach { align-self:flex-start; background:var(--surface-2); color:var(--text); border-radius:16px 16px 16px 4px; }
 .chat-bubble.user { align-self:flex-end; background:var(--brand); color:var(--brand-ink); border-radius:16px 16px 4px 16px; }
 .coach-composer { display:flex; gap:var(--s2); padding:var(--s3) var(--s4) calc(var(--s3) + env(safe-area-inset-bottom)); border-top:1px solid var(--border); background:var(--surface); }
-.coach-composer input { flex:1; min-height:var(--touch); padding:0 var(--s4); border:1px solid var(--border); border-radius:var(--r-pill); background:var(--surface-2); color:var(--text); font-size:15px; }
-.coach-composer .btn { min-width:var(--touch); border-radius:var(--r-pill); }
+/* Ola1-S3: CSS muerto borrado (.coach-composer input / .btn) — el composer vivo usa textarea + .composer-send. */
 .coach-entry { display:flex; align-items:center; justify-content:space-between; gap:var(--s3); width:100%; padding:var(--s4); margin-bottom:var(--s4); border:1px solid var(--border); border-radius:var(--r-lg); background:linear-gradient(135deg,var(--brand-tint),var(--surface)); color:var(--text); font-weight:600; cursor:pointer; }
 
 /* Coach · selector de personalidad (R2) */
@@ -956,7 +969,7 @@ html, body { transition: background-color var(--dur-base) var(--ease-standard), 
 .coach-composer textarea { flex:1; min-height:var(--touch); max-height:120px; padding:11px var(--s4); border:1px solid var(--border); border-radius:var(--r-lg); background:var(--surface-2); color:var(--text); font:inherit; font-size:15px; line-height:21px; resize:none; overflow-y:auto; }
 .composer-icon { width:44px; height:44px; flex:0 0 auto; display:grid; place-items:center; border-radius:50%; background:transparent; border:none; color:var(--text-2); cursor:pointer; }
 .composer-icon:disabled { opacity:.4; cursor:default; }
-.composer-send { width:36px; height:36px; flex:0 0 auto; margin-bottom:4px; border-radius:50%; background:var(--brand); color:var(--brand-ink); display:grid; place-items:center; border:none; cursor:pointer; }
+.composer-send { width:var(--touch); height:var(--touch); flex:0 0 auto; margin-bottom:4px; border-radius:50%; background:var(--brand); color:var(--brand-ink); display:grid; place-items:center; border:none; cursor:pointer; } /* Ola1-S3: target 44px */
 .composer-send:disabled { opacity:.4; cursor:default; }
 
 /* Quick actions: scroll horizontal con snap, sin barra */
