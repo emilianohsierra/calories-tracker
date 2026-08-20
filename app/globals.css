@@ -796,6 +796,9 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .ring-anim, .ring-anim * { transition-duration: .001ms !important; }
+  /* M1 (Nielsen a11y): las barras de progreso (reto/XP/objetivo/lealtad + onboarding) NO animan su ancho.
+     Los fills usan estilos inline (transition: width var(--dur-ring)…) → author-important gana a inline. */
+  [role="progressbar"] > *, .meter-fill, .wizard-progress > span { transition-duration: .001ms !important; }
 }
 
 /* Saludo / HOME conversacional */
