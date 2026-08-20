@@ -31,7 +31,7 @@ export default function RepasoCard({ repaso, onClose, onDone }) {
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Repaso" style={{ maxWidth: 480 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--s3)' }}>
-          <h2 style={{ margin: 0, fontSize: 18, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <h2 className="c-title" style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <Icon name="book" size={18} /> Reforcemos {repaso?.titulo ? `· ${repaso.titulo}` : ''}
           </h2>
           <button type="button" onClick={onClose} aria-label="Cerrar" style={{ display: 'inline-flex', width: 'var(--touch)', height: 'var(--touch)', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', color: 'var(--text-3)', cursor: 'pointer', margin: '-8px -8px 0 0' }}>
@@ -53,7 +53,9 @@ export default function RepasoCard({ repaso, onClose, onDone }) {
                 const esCorrecta = idx === q.correcta;
                 const elegidaEsta = elegida === idx;
                 const resp = elegida != null;
-                const borde = resp && esCorrecta ? 'var(--ok)' : resp && elegidaEsta ? 'var(--border)' : 'var(--border)';
+                // Feedback unificado con LeccionQuiz (S5): correcta en verde/check; la elegida
+                // incorrecta se marca con borde neutro (--text-3), NUNCA rojo (re-enseñar sin castigo).
+                const borde = resp && esCorrecta ? 'var(--ok)' : resp && elegidaEsta ? 'var(--text-3)' : 'var(--border)';
                 const fondo = resp && esCorrecta ? 'var(--ok-tint)' : 'var(--surface)';
                 return (
                   <button

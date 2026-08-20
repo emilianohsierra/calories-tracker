@@ -21,7 +21,9 @@ const LECCIONES = [
 const ESTADOS = {
   nuevo: { label: 'Nuevo', border: 'var(--text-3)', bg: 'transparent', text: 'var(--text-3)' },
   aprendiendo: { label: 'Aprendiendo', border: 'var(--brand)', bg: 'var(--brand-tint)', text: 'var(--brand-strong)' },
-  dominado: { label: 'Dominado', border: 'var(--ok)', bg: 'var(--ok)', text: 'var(--ok)' },
+  // 'text' del label a --text-2 (contraste AA; --ok verde quedaba en frontera para texto chico).
+  // El verde de "dominado" se conserva NO por color de texto sino por el punto + el check icon.
+  dominado: { label: 'Dominado', border: 'var(--ok)', bg: 'var(--ok)', text: 'var(--text-2)' },
 };
 
 export default function MiAprendizaje() {
@@ -88,7 +90,7 @@ function AprendizajePanel({ edu, sinEvaluar, onClose, onRecalibrar, onLeccion, o
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Mi aprendizaje" style={{ maxWidth: 480 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--s4)' }}>
-          <h2 style={{ margin: 0, fontSize: 18, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <h2 className="c-title" style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <Icon name="book" size={18} /> Mi aprendizaje
           </h2>
           <button type="button" onClick={onClose} aria-label="Cerrar" style={{ display: 'inline-flex', width: 'var(--touch)', height: 'var(--touch)', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', color: 'var(--text-3)', cursor: 'pointer', margin: '-8px -8px 0 0' }}>
@@ -101,7 +103,7 @@ function AprendizajePanel({ edu, sinEvaluar, onClose, onRecalibrar, onLeccion, o
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s3)', padding: 'var(--s3)', borderRadius: 'var(--r-md)', background: 'var(--brand-tint)', border: '1px solid var(--border)', marginBottom: 'var(--s4)' }}>
             <span style={{ color: 'var(--brand-strong)', flexShrink: 0 }}><Icon name="sparkles" size={18} /></span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Listo para reforzar</div>
+              <div className="c-body" style={{ fontWeight: 600 }}>Listo para reforzar</div>
               <div className="c-subtitle">{repaso.titulo}</div>
             </div>
             <button type="button" className="btn btn-primary" onClick={() => onReforzar(repaso)} style={{ minHeight: 'var(--touch)', padding: '6px 14px' }}>Reforzar</button>
@@ -118,7 +120,7 @@ function AprendizajePanel({ edu, sinEvaluar, onClose, onRecalibrar, onLeccion, o
                 return (
                   <div key={t.concepto} style={{ display: 'flex', alignItems: 'center', gap: 'var(--s3)' }}>
                     <EstadoDot estado={t.estado} />
-                    <span style={{ flex: 1, minWidth: 0, fontSize: 14, color: 'var(--text)' }}>{t.titulo}</span>
+                    <span className="c-body" style={{ flex: 1, minWidth: 0 }}>{t.titulo}</span>
                     {t.estado === 'dominado' && <span style={{ color: 'var(--ok)', display: 'inline-flex' }} aria-hidden="true"><Icon name="check" size={15} /></span>}
                     <span className="c-subtitle" style={{ color: e.text }}>{t.due ? 'Listo para reforzar' : e.label}</span>
                   </div>
