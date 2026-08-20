@@ -98,10 +98,29 @@ Archivos **disjuntos** por slice para repartir sin colisión. **Nota de worktree
 | **S8** | **Inter vía `next/font`** (transversal, blast-radius) | `app/layout.js`, `app/globals.css` | ALTO | MEDIO | tras verificación |
 
 **Reparto paralelo sugerido:**
-- **Rams (yo):** S1 (arrancado) → S4 (Consejo, superficie de marca).
-- **Builder A (Ford):** S2 (Coach a11y) → luego S5.
+- **Rams (yo):** S1 ✅ (`692d132`) → S4 ✅ (`d9d944b`) → S7-a cuando se coordine.
+- **Builder A (Ford):** S2 (Coach a11y) → luego S5 (+ **absorbe S7-b**, ver §4.1).
 - **Builder B (CTO):** S3 (globals, dueño único) → luego S6.
-- **S7** al cerrar S1/S2/S4 (evita choque en archivos compartidos). **S8** al final.
+- **S7** particionado para evitar colisión (§4.1). **S8** al final.
+
+### 4.1 S7 — detalle PREPARADO (roles tipográficos), particionado sin colisión
+
+Auditados los `fontSize` inline reales. Regla: **adoptar rol donde existe uno; dejar los tamaños de display (héroe/cifra grande) que son intencionales.** Partición por dueño para no chocar en el worktree compartido:
+
+**S7-a — Rams (archivos libres, sin solape):**
+- `components/home/MacroBar.js:13` (`13/500/text-2`) → `.c-subtitle` (match exacto); `:14` cifra → `.num` + peso local.
+- `components/DayProgress.js:58` (`12/600/text-2`) → caption a `.c-subtitle`.
+- `components/MealList.js:56,59` (botones `12`) → `.c-subtitle`.
+- `components/home/TrainingRow.js:25` (`13`) → `.c-subtitle`.
+- `components/coach/cards/MealCard.js:40` (badge `12/600/brand-strong`) → `.c-eyebrow` + color.
+
+**S7-b — lo ABSORBE Builder A dentro de S5 (mismos archivos, cero colisión):**
+- Headers de modal `h2 fontSize:18`: `components/coach/RepasoCard.js:34`, `LeccionQuiz.js:46`, `MiAprendizaje.js:91` → tratamiento de título de diálogo consistente (base `.c-title`).
+- `components/coach/MiAprendizaje.js:104,121` (`14`) → `.c-body`; + el fix de contraste del label "dominado" (ya en S5).
+
+**DEJAR (display intencional, no es violación de rol):** `DayProgress.js:36` (héroe kcal `40`), `MiAprendizaje.js:133` (cifra `20`), y el `h2` héroe de `ConsejoDelDia` (`20`, ya con `.c-title` de base).
+
+> Nada de S7 se commitea hasta que Lugia confirme el reparto (toca varios archivos, algunos del carril S5). Este bloque es el checklist turn-key para ejecutarlo sin pisar a nadie.
 
 ---
 
